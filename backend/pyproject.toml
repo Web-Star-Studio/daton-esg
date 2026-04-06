@@ -5,13 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "worton-esg-backend"
 version = "0.1.0"
-description = "Backend stub for the Daton ESG local development environment."
+description = "FastAPI backend skeleton for the Daton ESG platform."
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115,<1.0",
   "uvicorn[standard]>=0.30,<1.0",
   "pydantic-settings>=2.4,<3.0",
+  "structlog>=24.4,<26.0",
 ]
 
-[tool.setuptools]
-packages = ["app", "app.core"]
+[tool.setuptools.packages.find]
+include = ["app*"]

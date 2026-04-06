@@ -1,22 +1,39 @@
+from contextlib import asynccontextmanager
+
+import structlog
 from fastapi import FastAPI
 
+from app.api.health import router as health_router
 from app.core.config import get_settings
+from app.core.logging import configure_logging
 
 settings = get_settings()
-
-app = FastAPI(
-    title="Daton ESG API",
-    version="0.1.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-)
+logger = structlog.get_logger(__name__)
 
 
-@app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("application.startup", environment=settings.environment)
+    yield
+    logger.info("application.shutdown")
 
 
-@app.get("/")
-async def root() -> dict[str, str]:
-    return {"service": "daton-esg-api", "environment": settings.environment}
+def create_app() -> FastAPI:
+    configure_logging()
+    app = FastAPI(
+        title="Daton ESG API",
+        version="0.1.0",
+        docs_url="/docs",
+        redoc_url="/redoc",
+        lifespan=lifespan,
+    )
+    app.include_router(health_router)
+
+    @app.get("/")
+    async def root() -> dict[str, str]:
+        return {"service": "daton-esg-api", "environment": settings.environment}
+
+    return app
+
+
+app = create_app()

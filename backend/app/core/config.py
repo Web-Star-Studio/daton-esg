@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     aws_secret_access_key: str = "test"
     aws_endpoint_url: str = "http://localstack:4566"
     s3_bucket_name: str = "worton-esg-development"
+    log_level: str = "INFO"
+    log_json: bool = True
 
     model_config = SettingsConfigDict(
         env_file=".env",
