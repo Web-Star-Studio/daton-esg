@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -8,6 +8,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.models.enums import ReportStatus
+
+if TYPE_CHECKING:
+    from app.models.project import Project
 
 
 class Report(Base):
@@ -62,4 +65,4 @@ class Report(Base):
         onupdate=func.now(),
     )
 
-    project = relationship("Project", back_populates="reports")
+    project: Mapped["Project"] = relationship("Project", back_populates="reports")

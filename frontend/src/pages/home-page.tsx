@@ -10,10 +10,11 @@ export function HomePage() {
 
   useEffect(() => {
     let active = true
+    const controller = new AbortController()
 
     async function loadHealth() {
       try {
-        const response = await fetch('/api/health')
+        const response = await fetch('/api/health', { signal: controller.signal })
 
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`)
@@ -30,6 +31,10 @@ export function HomePage() {
           backendStatus: data.status ?? 'unknown',
         })
       } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return
+        }
+
         if (!active) {
           return
         }
@@ -46,6 +51,7 @@ export function HomePage() {
 
     return () => {
       active = false
+      controller.abort()
     }
   }, [])
 

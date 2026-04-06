@@ -118,6 +118,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
+    op.create_index("ix_projects_user_id", "projects", ["user_id"], unique=False)
 
     op.create_table(
         "documents",
@@ -143,6 +144,9 @@ def upgrade() -> None:
         ),
         sa.ForeignKeyConstraint(["project_id"], ["projects.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        "ix_documents_project_id", "documents", ["project_id"], unique=False
     )
 
     op.create_table(
@@ -179,11 +183,36 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["project_id"], ["projects.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
+    op.create_index("ix_reports_project_id", "reports", ["project_id"], unique=False)
+    op.execute(
+        """
+        CREATE FUNCTION update_updated_at_column()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            NEW.updated_at = now();
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER update_reports_updated_at
+        BEFORE UPDATE ON reports
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+        """
+    )
 
 
 def downgrade() -> None:
     bind = op.get_bind()
 
+    op.execute("DROP TRIGGER IF EXISTS update_reports_updated_at ON reports")
+    op.execute("DROP FUNCTION IF EXISTS update_updated_at_column()")
+    op.execute("DROP INDEX IF EXISTS ix_reports_project_id")
+    op.execute("DROP INDEX IF EXISTS ix_documents_project_id")
+    op.execute("DROP INDEX IF EXISTS ix_projects_user_id")
     op.drop_table("reports")
     op.drop_table("documents")
     op.drop_table("projects")
