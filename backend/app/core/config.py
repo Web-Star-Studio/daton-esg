@@ -1,3 +1,4 @@
+import os
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
@@ -30,7 +31,7 @@ class Settings(BaseSettings):
     @field_validator("database_url", mode="after")
     @classmethod
     def normalize_database_url(cls, value: str) -> str:
-        if Path("/.dockerenv").exists():
+        if cls.is_container_environment():
             return value
 
         parsed = urlsplit(value)
@@ -53,6 +54,15 @@ class Settings(BaseSettings):
                 parsed.query,
                 parsed.fragment,
             )
+        )
+
+    @staticmethod
+    def is_container_environment() -> bool:
+        return (
+            Path("/.dockerenv").exists()
+            or Path("/run/.containerenv").exists()
+            or os.getenv("DOCKER_CONTAINER") is not None
+            or os.getenv("PODMAN_CONTAINER") is not None
         )
 
 
