@@ -14,7 +14,9 @@ export function HomePage() {
 
     async function loadHealth() {
       try {
-        const response = await fetch('/api/health', { signal: controller.signal })
+        const response = await fetch('/api/health', {
+          signal: controller.signal,
+        })
 
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`)
