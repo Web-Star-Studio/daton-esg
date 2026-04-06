@@ -66,6 +66,22 @@ docker compose logs -f postgres
 docker compose logs -f localstack
 ```
 
+### Backend Commands
+
+```bash
+cd backend
+uv sync
+uv run alembic upgrade head
+uv run uvicorn app.main:app --reload --port 8000
+```
+
+Optional local seed:
+
+```bash
+cd backend
+uv run python scripts/seed_dev_data.py
+```
+
 ### Tear Down
 
 Stop the environment:
