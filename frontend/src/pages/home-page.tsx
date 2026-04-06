@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { SiteHeader } from '../components/site-header'
 
 type HealthState =
   | { status: 'loading' }
@@ -14,7 +16,7 @@ export function HomePage() {
 
     async function loadHealth() {
       try {
-        const response = await fetch('/api/health', {
+        const response = await fetch('/health', {
           signal: controller.signal,
         })
 
@@ -58,78 +60,109 @@ export function HomePage() {
   }, [])
 
   return (
-    <main className="min-h-screen px-6 py-10 text-slate-900 sm:px-10 lg:px-12">
-      <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-6xl flex-col justify-between gap-12 rounded-[2rem] border border-emerald-950/10 bg-white/70 p-8 shadow-[0_24px_80px_rgba(27,67,50,0.12)] backdrop-blur md:p-12">
-        <section className="grid gap-10 lg:grid-cols-[1.3fr_0.7fr]">
-          <div className="space-y-8">
-            <div className="inline-flex items-center rounded-full border border-emerald-900/10 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-900">
-              Daton ESG · Frontend skeleton · US-1.4
+    <div className="min-h-screen bg-[#000000] text-white">
+      <SiteHeader />
+
+      <main>
+        <section className="border-b border-white/10 bg-[#000000] px-6 pb-24 pt-28 sm:px-10 lg:px-12">
+          <div className="mx-auto flex w-full max-w-[980px] flex-col gap-8">
+            <p className="text-left text-[12px] font-semibold uppercase leading-[1.33] tracking-[-0.12px] text-white/72">
+              Worton ESG Report Generator
+            </p>
+            <div className="space-y-5">
+              <h1 className="max-w-4xl text-left [font-family:'SF_Pro_Display','SF_Pro_Icons','Helvetica_Neue',Helvetica,Arial,sans-serif] text-[40px] font-semibold leading-[1.07] tracking-[-0.28px] text-white sm:text-[56px]">
+                Acesso seguro para operar relatórios ESG com precisão editorial.
+              </h1>
+              <p className="max-w-2xl text-left text-[17px] font-normal leading-[1.47] tracking-[-0.374px] text-white/80">
+                O Daton ESG centraliza autenticação, ingestão documental e
+                geração de relatório em um ambiente único para consultores da
+                Worton.
+              </p>
             </div>
 
-            <div className="space-y-5">
-              <p className="max-w-2xl text-sm font-semibold uppercase tracking-[0.24em] text-emerald-800/70">
-                Worton ESG Report Generator
-              </p>
-              <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">
-                Base inicial do frontend para operar projetos, documentos e
-                relatórios ESG.
-              </h1>
-              <p className="max-w-2xl text-lg leading-8 text-slate-700">
-                Esta tela é um placeholder técnico do monorepo. Ela valida o
-                bootstrap com React 19, TypeScript, React Router, Tailwind e o
-                proxy local para a API FastAPI.
-              </p>
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <Link
+                to="/login"
+                className="apple-blue-button apple-focus-ring inline-flex min-h-11 items-center justify-center px-[15px] py-2 text-[17px] font-normal leading-[1]"
+              >
+                Entrar
+              </Link>
+              <a
+                href="#platform-status"
+                className="apple-focus-ring apple-pill-link inline-flex min-h-11 items-center justify-center border border-white/32 px-5 py-2 text-[17px] font-normal leading-[1] text-[#2997ff]"
+              >
+                Ver status &gt;
+              </a>
             </div>
           </div>
+        </section>
 
-          <aside className="flex flex-col justify-between gap-6 rounded-[1.75rem] border border-emerald-900/10 bg-slate-950 px-6 py-7 text-slate-50">
-            <div className="space-y-4">
-              <p className="text-sm uppercase tracking-[0.22em] text-emerald-300">
+        <section
+          id="platform-status"
+          className="bg-[#f5f5f7] px-6 py-20 text-[#1d1d1f] sm:px-10 lg:px-12"
+        >
+          <div className="mx-auto grid w-full max-w-[1180px] gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+            <article className="rounded-lg bg-white px-7 py-8 shadow-[rgba(0,0,0,0.22)_3px_5px_30px_0px]">
+              <p className="text-[14px] font-semibold uppercase leading-[1.29] tracking-[-0.224px] text-black/70">
+                Frontend foundation
+              </p>
+              <h2 className="mt-4 max-w-3xl [font-family:'SF_Pro_Display','SF_Pro_Icons','Helvetica_Neue',Helvetica,Arial,sans-serif] text-[28px] font-normal leading-[1.14] tracking-[0.196px]">
+                Base alinhada para autenticação, rotas protegidas e integração
+                com o backend FastAPI.
+              </h2>
+              <p className="mt-4 max-w-2xl text-[17px] leading-[1.47] tracking-[-0.374px] text-black/80">
+                A home continua pública, mas agora segue a mesma linguagem
+                visual da futura experiência autenticada e aponta para a entrada
+                do workspace.
+              </p>
+            </article>
+
+            <article className="rounded-lg bg-[#1d1d1f] px-7 py-8 text-white shadow-[rgba(0,0,0,0.22)_3px_5px_30px_0px]">
+              <p className="text-[14px] font-semibold uppercase leading-[1.29] tracking-[-0.224px] text-white/72">
                 Backend connectivity
               </p>
-              <div className="space-y-3">
-                <p className="text-2xl font-semibold">
-                  {health.status === 'loading' && 'Checking /api/health'}
-                  {health.status === 'success' && 'API reachable'}
-                  {health.status === 'error' && 'API unavailable'}
-                </p>
-                <p className="text-sm leading-6 text-slate-300">
-                  {health.status === 'loading' &&
-                    'The frontend is calling the backend through the Vite proxy.'}
-                  {health.status === 'success' &&
-                    `The backend answered with status "${health.backendStatus}".`}
-                  {health.status === 'error' &&
-                    `The health check failed through the proxy: ${health.message}.`}
-                </p>
+              <p className="mt-4 [font-family:'SF_Pro_Display','SF_Pro_Icons','Helvetica_Neue',Helvetica,Arial,sans-serif] text-[28px] font-normal leading-[1.14] tracking-[0.196px]">
+                {health.status === 'loading' && 'Checking /health'}
+                {health.status === 'success' && 'API reachable'}
+                {health.status === 'error' && 'API unavailable'}
+              </p>
+              <p className="mt-4 text-[17px] leading-[1.47] tracking-[-0.374px] text-white/80">
+                {health.status === 'loading' &&
+                  'The frontend is calling the backend through the Vite proxy.'}
+                {health.status === 'success' &&
+                  `The backend answered with status "${health.backendStatus}".`}
+                {health.status === 'error' &&
+                  `The health check failed through the proxy: ${health.message}.`}
+              </p>
+
+              <div className="mt-8 grid gap-3 text-[14px] leading-[1.29] tracking-[-0.224px] text-white/72">
+                <p>Frontend · 5173</p>
+                <p>Backend · 8000</p>
+                <p>Postgres · 5432</p>
+                <p>LocalStack · 4566</p>
               </div>
-            </div>
-
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
-              <p className="font-medium text-white">Expected local ports</p>
-              <p className="mt-2">Frontend: 5173</p>
-              <p>Backend: 8000</p>
-              <p>Postgres: 5432</p>
-              <p>LocalStack: 4566</p>
-            </div>
-          </aside>
+            </article>
+          </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-3">
-          <StatusCard
-            title="Routing"
-            description="React Router is mounted and the root route is wired to this placeholder page."
-          />
-          <StatusCard
-            title="Styling"
-            description="Tailwind is configured as the base styling system for the frontend."
-          />
-          <StatusCard
-            title="Project layout"
-            description="components, pages, hooks, services and types directories are available for the next stories."
-          />
+        <section className="bg-[#000000] px-6 py-20 sm:px-10 lg:px-12">
+          <div className="mx-auto grid w-full max-w-[1180px] gap-4 md:grid-cols-3">
+            <StatusCard
+              title="Routing"
+              description="React Router now supports public and protected flows, including /login and /dashboard."
+            />
+            <StatusCard
+              title="Authentication"
+              description="AWS Cognito can be wired into the SPA through Amplify with runtime tokens kept in memory."
+            />
+            <StatusCard
+              title="Backend sync"
+              description="Authenticated sessions normalize consultant identity through GET /api/v1/auth/me."
+            />
+          </div>
         </section>
-      </div>
-    </main>
+      </main>
+    </div>
   )
 }
 
@@ -140,11 +173,13 @@ type StatusCardProps = {
 
 function StatusCard({ title, description }: StatusCardProps) {
   return (
-    <article className="rounded-[1.5rem] border border-slate-900/8 bg-emerald-50/55 p-5 shadow-sm">
-      <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-800/75">
+    <article className="rounded-lg bg-[#272729] px-6 py-7 shadow-[rgba(0,0,0,0.22)_3px_5px_30px_0px]">
+      <p className="text-[12px] font-semibold uppercase leading-[1.33] tracking-[-0.12px] text-white/72">
         {title}
       </p>
-      <p className="mt-3 text-base leading-7 text-slate-700">{description}</p>
+      <p className="mt-3 text-[17px] leading-[1.47] tracking-[-0.374px] text-white/84">
+        {description}
+      </p>
     </article>
   )
 }

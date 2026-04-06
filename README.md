@@ -51,7 +51,7 @@ curl http://localhost:8000/health
 Expected response:
 
 ```json
-{"status":"ok"}
+{ "status": "ok" }
 ```
 
 Check running containers:
@@ -103,6 +103,57 @@ pnpm lint
 pnpm format:check
 pnpm test --run
 ```
+
+## Auth Setup
+
+### AWS Cognito
+
+`US-2.1` covers Cognito provisioning only. At this stage, Cognito is an
+environment prerequisite for upcoming authentication stories, but it is not yet
+wired into the backend or frontend runtime.
+
+Use the actual User Pool region configured in AWS. The current team setup uses
+`sa-east-1`.
+
+1. Create a Cognito User Pool in the AWS Console.
+2. Configure standard attributes:
+   - `email` required
+   - `name` enabled
+3. Configure the password policy for development/MVP:
+   - minimum 8 characters
+   - uppercase, lowercase, number, and special character required
+4. Configure MFA as `Optional`.
+5. Create an App Client for the SPA:
+   - no client secret
+   - enable username/email + password sign-in
+   - keep refresh tokens enabled
+6. Create one manual development user and force a password reset or set a
+   permanent password through the console workflow.
+
+Copy the resulting values into `.env` using the placeholders from
+`.env.example`:
+
+```bash
+AWS_COGNITO_REGION=sa-east-1
+AWS_COGNITO_USER_POOL_ID=sa-east-1_example123
+AWS_COGNITO_APP_CLIENT_ID=exampleclientid1234567890
+AWS_COGNITO_ISSUER=https://cognito-idp.sa-east-1.amazonaws.com/sa-east-1_example123
+AWS_COGNITO_JWKS_URL=https://cognito-idp.sa-east-1.amazonaws.com/sa-east-1_example123/.well-known/jwks.json
+AWS_COGNITO_TEST_USER_EMAIL=consultor.dev@example.com
+VITE_AWS_COGNITO_REGION=sa-east-1
+VITE_AWS_COGNITO_USER_POOL_ID=sa-east-1_example123
+VITE_AWS_COGNITO_APP_CLIENT_ID=exampleclientid1234567890
+```
+
+Notes:
+
+- Do not commit real Cognito IDs, secrets, or user passwords.
+- `AWS_COGNITO_ISSUER` must match the exact User Pool region and ID.
+- `AWS_COGNITO_JWKS_URL` is derived directly from the issuer.
+- The React frontend reads Cognito values from the monorepo root `.env` through
+  `VITE_AWS_COGNITO_*` variables.
+- Runtime integration is deferred to `US-2.2` (JWT validation in FastAPI) and
+  completed in `US-2.3` (frontend login flow).
 
 ### Tear Down
 

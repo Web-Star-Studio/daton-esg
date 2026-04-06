@@ -19,6 +19,16 @@ class Settings(BaseSettings):
     aws_secret_access_key: str = "test"
     aws_endpoint_url: str = "http://localstack:4566"
     s3_bucket_name: str = "worton-esg-development"
+    aws_cognito_region: str = "us-east-1"
+    aws_cognito_user_pool_id: str = "us-east-1_example123"
+    aws_cognito_app_client_id: str = "exampleclientid1234567890"
+    aws_cognito_issuer: str = (
+        "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_example123"
+    )
+    aws_cognito_jwks_url: str = (
+        "https://cognito-idp.us-east-1.amazonaws.com/"
+        "us-east-1_example123/.well-known/jwks.json"
+    )
     log_level: str = "INFO"
     log_json: bool = True
 

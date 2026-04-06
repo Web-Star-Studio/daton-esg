@@ -1,0 +1,114 @@
+import { Amplify } from 'aws-amplify'
+import {
+  fetchAuthSession,
+  signIn,
+  signOut,
+  type AuthSession,
+} from 'aws-amplify/auth'
+import { cognitoUserPoolsTokenProvider } from 'aws-amplify/auth/cognito'
+import { sharedInMemoryStorage } from 'aws-amplify/utils'
+import type { AuthTokens } from '../types/auth'
+
+type CognitoFrontendConfig = {
+  region: string
+  userPoolId: string
+  userPoolClientId: string
+}
+
+let isConfigured = false
+
+function getFrontendCognitoConfig(): CognitoFrontendConfig | null {
+  const region = import.meta.env.VITE_AWS_COGNITO_REGION?.trim()
+  const userPoolId = import.meta.env.VITE_AWS_COGNITO_USER_POOL_ID?.trim()
+  const userPoolClientId =
+    import.meta.env.VITE_AWS_COGNITO_APP_CLIENT_ID?.trim()
+
+  if (!region || !userPoolId || !userPoolClientId) {
+    return null
+  }
+
+  return {
+    region,
+    userPoolId,
+    userPoolClientId,
+  }
+}
+
+export function isAmplifyAuthConfigured() {
+  return getFrontendCognitoConfig() !== null
+}
+
+export function configureAmplifyAuth() {
+  if (isConfigured) {
+    return
+  }
+
+  const config = getFrontendCognitoConfig()
+
+  if (!config) {
+    return
+  }
+
+  cognitoUserPoolsTokenProvider.setKeyValueStorage(sharedInMemoryStorage)
+
+  Amplify.configure(
+    {
+      Auth: {
+        Cognito: {
+          userPoolId: config.userPoolId,
+          userPoolClientId: config.userPoolClientId,
+          loginWith: {
+            email: true,
+          },
+        },
+      },
+    },
+    { ssr: false }
+  )
+
+  isConfigured = true
+}
+
+function ensureConfigured() {
+  configureAmplifyAuth()
+
+  if (!isAmplifyAuthConfigured()) {
+    throw new Error(
+      'Configuração do Cognito ausente. Preencha VITE_AWS_COGNITO_REGION, VITE_AWS_COGNITO_USER_POOL_ID e VITE_AWS_COGNITO_APP_CLIENT_ID no .env.'
+    )
+  }
+}
+
+function mapSessionTokens(session: AuthSession): AuthTokens {
+  return {
+    accessToken: session.tokens?.accessToken?.toString() ?? null,
+    idToken: session.tokens?.idToken?.toString() ?? null,
+  }
+}
+
+export async function getCurrentAuthTokens() {
+  ensureConfigured()
+  const session = await fetchAuthSession()
+  return mapSessionTokens(session)
+}
+
+export async function signInWithEmailPassword(email: string, password: string) {
+  ensureConfigured()
+
+  const result = await signIn({
+    username: email,
+    password,
+  })
+
+  if (!result.isSignedIn) {
+    throw new Error('Fluxo de autenticação adicional não suportado nesta fase.')
+  }
+
+  const session = await fetchAuthSession()
+  return mapSessionTokens(session)
+}
+
+export async function signOutFromCognito() {
+  ensureConfigured()
+  await signOut()
+}
