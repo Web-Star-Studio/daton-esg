@@ -13,7 +13,9 @@ from app.models.enums import OrganizationSize, ProjectStatus
 class Project(Base):
     __tablename__ = "projects"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
@@ -42,8 +44,12 @@ class Project(Base):
         default=ProjectStatus.COLLECTING,
         server_default=text("'collecting'::project_status"),
     )
-    material_topics: Mapped[dict[str, Any] | list[Any] | None] = mapped_column(JSONB, nullable=True)
-    sdg_goals: Mapped[dict[str, Any] | list[Any] | None] = mapped_column(JSONB, nullable=True)
+    material_topics: Mapped[dict[str, Any] | list[Any] | None] = mapped_column(
+        JSONB, nullable=True
+    )
+    sdg_goals: Mapped[dict[str, Any] | list[Any] | None] = mapped_column(
+        JSONB, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -57,5 +63,9 @@ class Project(Base):
     )
 
     user = relationship("User", back_populates="projects")
-    documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
-    reports = relationship("Report", back_populates="project", cascade="all, delete-orphan")
+    documents = relationship(
+        "Document", back_populates="project", cascade="all, delete-orphan"
+    )
+    reports = relationship(
+        "Report", back_populates="project", cascade="all, delete-orphan"
+    )

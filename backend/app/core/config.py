@@ -12,9 +12,7 @@ class Settings(BaseSettings):
     postgres_user: str = "worton"
     postgres_password: str = "worton"
     postgres_db: str = "worton_esg"
-    database_url: str = (
-        "postgresql+asyncpg://worton:worton@postgres:5432/worton_esg"
-    )
+    database_url: str = "postgresql+asyncpg://worton:worton@postgres:5432/worton_esg"
     aws_region: str = "us-east-1"
     aws_access_key_id: str = "test"
     aws_secret_access_key: str = "test"

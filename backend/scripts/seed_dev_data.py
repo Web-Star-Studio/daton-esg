@@ -24,7 +24,11 @@ async def seed() -> None:
             session.add(user)
             await session.flush()
 
-        await session.execute(delete(Project).where(Project.user_id == user.id, Project.org_name == "Demo ESG Project"))
+        await session.execute(
+            delete(Project).where(
+                Project.user_id == user.id, Project.org_name == "Demo ESG Project"
+            )
+        )
         session.add(
             Project(
                 id=uuid.uuid4(),

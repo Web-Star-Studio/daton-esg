@@ -1,5 +1,7 @@
 # Daton ESG
 
+[![CI](https://github.com/Web-Star-Studio/daton-esg/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Web-Star-Studio/daton-esg/actions/workflows/ci.yml)
+
 Daton ESG is the Worton ESG Report Generator monorepo. The product is an internal SaaS platform for generating sustainability reports in Portuguese, based on client documents and aligned primarily to the GRI standard.
 
 The goal of the MVP is to reduce the time required to produce ESG reports by automating document intake, data extraction, report drafting with AI, chart and table generation, GRI index mapping, consultant review, and export to Word and PDF.
@@ -80,6 +82,26 @@ Optional local seed:
 ```bash
 cd backend
 uv run python scripts/seed_dev_data.py
+```
+
+### Quality Checks
+
+Backend:
+
+```bash
+cd backend
+uv run ruff check .
+uv run ruff format --check .
+uv run pytest --tb=short
+```
+
+Frontend:
+
+```bash
+cd frontend
+pnpm lint
+pnpm format:check
+pnpm test --run
 ```
 
 ### Tear Down
