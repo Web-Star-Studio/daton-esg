@@ -101,7 +101,37 @@ export async function signInWithEmailPassword(email: string, password: string) {
   })
 
   if (!result.isSignedIn) {
-    throw new Error('Fluxo de autenticação adicional não suportado nesta fase.')
+    const nextStep = result.nextStep?.signInStep
+
+    if (nextStep === 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED') {
+      throw new Error(
+        'Sua conta exige definição de nova senha antes do acesso.'
+      )
+    }
+
+    if (
+      nextStep === 'CONFIRM_SIGN_IN_WITH_SMS_CODE' ||
+      nextStep === 'CONFIRM_SIGN_IN_WITH_TOTP_CODE'
+    ) {
+      throw new Error('Sua conta exige MFA para concluir a autenticação.')
+    }
+
+    if (
+      nextStep === 'CONTINUE_SIGN_IN_WITH_EMAIL_SETUP' ||
+      nextStep === 'CONTINUE_SIGN_IN_WITH_MFA_SELECTION' ||
+      nextStep === 'CONTINUE_SIGN_IN_WITH_FIRST_FACTOR_SELECTION' ||
+      nextStep === 'CONFIRM_SIGN_UP'
+    ) {
+      throw new Error(
+        'Sua conta exige uma etapa adicional de verificação antes do acesso.'
+      )
+    }
+
+    throw new Error(
+      nextStep
+        ? `Fluxo de autenticação adicional não suportado nesta fase: ${nextStep}.`
+        : 'Fluxo de autenticação adicional não suportado nesta fase.'
+    )
   }
 
   const session = await fetchAuthSession()

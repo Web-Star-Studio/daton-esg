@@ -3,7 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,13 +22,8 @@ class Settings(BaseSettings):
     aws_cognito_region: str = "us-east-1"
     aws_cognito_user_pool_id: str = "us-east-1_example123"
     aws_cognito_app_client_id: str = "exampleclientid1234567890"
-    aws_cognito_issuer: str = (
-        "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_example123"
-    )
-    aws_cognito_jwks_url: str = (
-        "https://cognito-idp.us-east-1.amazonaws.com/"
-        "us-east-1_example123/.well-known/jwks.json"
-    )
+    aws_cognito_issuer: str | None = None
+    aws_cognito_jwks_url: str | None = None
     log_level: str = "INFO"
     log_json: bool = True
 
@@ -37,6 +32,19 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @model_validator(mode="after")
+    def derive_cognito_urls(self) -> "Settings":
+        issuer = (
+            self.aws_cognito_issuer
+            or f"https://cognito-idp.{self.aws_cognito_region}.amazonaws.com/"
+            f"{self.aws_cognito_user_pool_id}"
+        )
+        self.aws_cognito_issuer = issuer
+        self.aws_cognito_jwks_url = (
+            self.aws_cognito_jwks_url or f"{issuer}/.well-known/jwks.json"
+        )
+        return self
 
     @field_validator("database_url", mode="after")
     @classmethod

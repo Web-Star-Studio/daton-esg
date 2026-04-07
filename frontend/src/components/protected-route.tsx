@@ -26,7 +26,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
       <Navigate
         to="/login"
         replace
-        state={{ from: location.pathname + location.search }}
+        state={{ from: location.pathname + location.search + location.hash }}
       />
     )
   }

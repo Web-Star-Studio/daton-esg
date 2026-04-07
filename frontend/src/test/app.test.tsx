@@ -137,6 +137,23 @@ describe('App', () => {
     })
   })
 
+  it('disables the submit button and shows loading copy while auth is loading', () => {
+    mockUseAuth.mockReturnValue(
+      createAuthState({
+        isLoading: true,
+      })
+    )
+
+    renderApp('/login')
+
+    const submitButton = screen.getByRole('button', {
+      name: /validando acesso/i,
+    })
+
+    expect(submitButton).toBeDisabled()
+    expect(screen.getByText(/validando acesso/i)).toBeInTheDocument()
+  })
+
   it('redirects to /dashboard after successful login', async () => {
     const authState = createAuthState({
       login: vi.fn(async () => {

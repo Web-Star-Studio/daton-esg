@@ -1,4 +1,3 @@
-import asyncio
 from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
@@ -190,19 +189,18 @@ def test_auth_me_reuses_existing_local_user_without_duplication(
     assert session.commit_count == 1
 
 
-def test_sync_user_from_claims_requires_email_for_first_login() -> None:
+@pytest.mark.asyncio
+async def test_sync_user_from_claims_requires_email_for_first_login() -> None:
     session = FakeSession({})
 
     async def fake_lookup(_session, _sub: str):
         return None
 
     with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(
-            sync_user_from_claims(
-                session,
-                make_claims(email=""),
-                lookup_user=fake_lookup,
-            )
+        await sync_user_from_claims(
+            session,
+            make_claims(email=""),
+            lookup_user=fake_lookup,
         )
 
     assert exc_info.value.status_code == 403
