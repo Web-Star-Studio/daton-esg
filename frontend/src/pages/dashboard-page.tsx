@@ -25,6 +25,8 @@ const sidebarItems = [
   { label: 'Identidade Visual', icon: 'palette', active: false },
 ] as const
 
+const COMPANY_PLACEHOLDER = 'Projeto atual'
+
 const indicatorSections = [
   {
     color: 'bg-emerald-500',
@@ -117,11 +119,24 @@ export function DashboardPage() {
   } | null>(null)
   const profileMenuRef = useRef<HTMLDivElement | null>(null)
   const pageActionLabel = 'Salvar Alterações'
+  const [indicatorValues, setIndicatorValues] = useState<
+    Record<string, string>
+  >(() =>
+    Object.fromEntries(
+      indicatorSections.flatMap((section) =>
+        section.items.map((item) => [
+          `${section.title}-${item.code}`,
+          item.value,
+        ])
+      )
+    )
+  )
 
   const initials = useMemo(
     () => getInitials(user?.name, user?.email),
     [user?.email, user?.name]
   )
+  const companyName = COMPANY_PLACEHOLDER
 
   useEffect(() => {
     if (!isProfileOpen) {
@@ -182,7 +197,7 @@ export function DashboardPage() {
               aria-label="Selecionar projeto"
             >
               <span className="whitespace-nowrap text-[13px] font-medium tracking-[-0.01em]">
-                Acme Inc.
+                {companyName}
               </span>
               <span
                 aria-hidden="true"
@@ -269,9 +284,15 @@ export function DashboardPage() {
               {isProfileOpen ? (
                 <div className="absolute right-0 top-full z-30 mt-2 w-56 rounded-[0.7rem] bg-white p-2 shadow-[rgba(0,0,0,0.16)_0px_10px_30px]">
                   <div className="border-b border-black/8 px-2 pb-2 pt-1">
-                    <p className="truncate text-[12px] font-medium tracking-[-0.01em] text-[#1d1d1f]">
-                      {user?.email ?? 'consultor@daton.ai'}
-                    </p>
+                    {user?.email ? (
+                      <p className="truncate text-[12px] font-medium tracking-[-0.01em] text-[#1d1d1f]">
+                        {user.email}
+                      </p>
+                    ) : (
+                      <p className="truncate text-[12px] font-medium tracking-[-0.01em] text-[#1d1d1f]">
+                        Usuário
+                      </p>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -373,10 +394,20 @@ export function DashboardPage() {
                           </div>
 
                           <div className="flex items-center gap-4">
-                            {/* TODO: replace this uncontrolled input with page state or refs when the save action is implemented. */}
                             <input
                               type="text"
-                              defaultValue={item.value}
+                              value={
+                                indicatorValues[
+                                  `${section.title}-${item.code}`
+                                ] ?? ''
+                              }
+                              onChange={(event) => {
+                                const nextValue = event.target.value
+                                setIndicatorValues((current) => ({
+                                  ...current,
+                                  [`${section.title}-${item.code}`]: nextValue,
+                                }))
+                              }}
                               placeholder="0"
                               className="apple-focus-ring w-36 rounded border-0 bg-[#e8e8ed] px-4 py-1.5 text-right text-[13px] font-semibold text-[#1d1d1f] transition-all focus:ring-2 focus:ring-primary/20"
                             />

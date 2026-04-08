@@ -189,6 +189,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setApiAuthToken(null)
       setAccessToken(null)
       setIdToken(null)
+      setPendingChallenge(null)
       setUser(null)
       throw normalizeAuthError(error)
     } finally {
