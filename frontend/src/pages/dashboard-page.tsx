@@ -160,6 +160,10 @@ export function DashboardPage() {
   }, [isProfileOpen])
 
   useEffect(() => {
+    if (!sidebarTooltip) {
+      return
+    }
+
     function handleWindowChange() {
       setSidebarTooltip(null)
     }
@@ -171,7 +175,7 @@ export function DashboardPage() {
       window.removeEventListener('scroll', handleWindowChange, true)
       window.removeEventListener('resize', handleWindowChange)
     }
-  }, [])
+  }, [sidebarTooltip])
 
   function showSidebarTooltip(
     event: MouseEvent<HTMLButtonElement> | FocusEvent<HTMLButtonElement>,
