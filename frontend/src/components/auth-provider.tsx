@@ -213,6 +213,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  function resetPendingChallenge() {
+    setPendingChallenge(null)
+  }
+
   return (
     <AuthContext.Provider
       value={{
@@ -224,6 +228,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         logout,
         pendingChallenge,
+        resetPendingChallenge,
         user,
       }}
     >

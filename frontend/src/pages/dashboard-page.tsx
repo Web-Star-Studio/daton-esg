@@ -1,4 +1,12 @@
-import { useMemo } from 'react'
+import {
+  type FocusEvent,
+  type MouseEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '../hooks/use-auth'
 
 const sidebarItems = [
@@ -101,93 +109,121 @@ function getInitials(
 
 export function DashboardPage() {
   const { logout, user } = useAuth()
+  const [isProfileOpen, setIsProfileOpen] = useState(false)
+  const [sidebarTooltip, setSidebarTooltip] = useState<{
+    label: string
+    top: number
+    left: number
+  } | null>(null)
+  const profileMenuRef = useRef<HTMLDivElement | null>(null)
+  const pageActionLabel = 'Salvar Alterações'
 
   const initials = useMemo(
     () => getInitials(user?.name, user?.email),
     [user?.email, user?.name]
   )
 
+  useEffect(() => {
+    if (!isProfileOpen) {
+      return
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (
+        profileMenuRef.current &&
+        !profileMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsProfileOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+    }
+  }, [isProfileOpen])
+
+  useEffect(() => {
+    function handleWindowChange() {
+      setSidebarTooltip(null)
+    }
+
+    window.addEventListener('scroll', handleWindowChange, true)
+    window.addEventListener('resize', handleWindowChange)
+
+    return () => {
+      window.removeEventListener('scroll', handleWindowChange, true)
+      window.removeEventListener('resize', handleWindowChange)
+    }
+  }, [])
+
+  function showSidebarTooltip(
+    event: MouseEvent<HTMLButtonElement> | FocusEvent<HTMLButtonElement>,
+    label: string
+  ) {
+    const rect = event.currentTarget.getBoundingClientRect()
+
+    setSidebarTooltip({
+      label,
+      left: rect.right + 12,
+      top: rect.top + rect.height / 2,
+    })
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-[#e8e8ed] font-display text-[#1d1d1f] antialiased">
-      <aside className="no-scrollbar hidden h-full w-[260px] flex-shrink-0 flex-col overflow-y-auto bg-[#e8e8ed] md:flex">
-        <div className="flex items-center gap-3 px-5 pb-6 pt-8">
-          <div className="flex size-10 items-center justify-center rounded-full bg-[#0f1923] text-[13px] font-semibold tracking-tight text-white shadow-sm">
-            AC
-          </div>
-          <div className="flex flex-col">
-            <h1 className="text-[17px] font-semibold leading-tight tracking-[-0.015em] text-[#1d1d1f]">
-              Acme Inc.
-            </h1>
-            <p className="flex cursor-default items-center gap-1 text-[13px] font-normal leading-tight text-[#86868b] transition-colors">
-              Empresa
-              <span
-                aria-hidden="true"
-                className="material-symbols-outlined text-[16px]"
-              >
-                expand_more
-              </span>
-            </p>
-          </div>
-        </div>
-
-        <nav className="flex-1 space-y-0.5 px-3 pb-8">
-          {sidebarItems.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
-                item.active
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-[#1d1d1f] hover:bg-black/5'
-              }`}
-            >
-              <span
-                aria-hidden="true"
-                className={`material-symbols-outlined text-[20px] ${
-                  item.active ? '' : 'text-[#86868b]'
-                }`}
-                style={
-                  item.active
-                    ? { fontVariationSettings: "'FILL' 1" }
-                    : undefined
-                }
-              >
-                {item.icon}
-              </span>
-              <span className="text-[14px] font-medium tracking-[-0.01em]">
-                {item.label}
-              </span>
-            </button>
-          ))}
-        </nav>
-      </aside>
-
-      <main className="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-black/8 bg-white/80 px-4 backdrop-blur-md sm:px-5">
+      <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-[#e8e8ed]">
+        <header className="relative flex h-14 flex-shrink-0 items-center justify-between border-b border-black/8 bg-[#e8e8ed] px-4 sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
-              className="apple-focus-ring inline-flex size-9 items-center justify-center rounded-full bg-white text-[#1d1d1f] shadow-sm transition-colors hover:bg-black/[0.03] md:hidden"
+              className="apple-focus-ring hidden items-center gap-1.5 rounded-[0.7rem] px-2 py-1.5 text-left text-[#1d1d1f] transition-colors hover:bg-black/[0.04] md:inline-flex"
+              aria-label="Selecionar projeto"
+            >
+              <span className="whitespace-nowrap text-[13px] font-medium tracking-[-0.01em]">
+                Acme Inc.
+              </span>
+              <span
+                aria-hidden="true"
+                className="material-symbols-outlined text-[16px] text-[#86868b]"
+              >
+                expand_more
+              </span>
+            </button>
+            <div className="hidden items-center gap-2 text-[13px] tracking-[-0.01em] text-[#86868b] md:flex">
+              <span aria-hidden="true" className="text-[#b0b0b4]">
+                /
+              </span>
+              <h1 className="text-[13px] font-medium tracking-[-0.01em] text-[#1d1d1f]">
+                Indicadores
+              </h1>
+            </div>
+            <button
+              type="button"
+              className="apple-focus-ring inline-flex size-9 items-center justify-center rounded-[0.7rem] bg-white text-[#1d1d1f] shadow-sm transition-colors hover:bg-black/[0.03] md:hidden"
               aria-label="Abrir navegação"
             >
               <span aria-hidden="true" className="material-symbols-outlined">
                 menu
               </span>
             </button>
+          </div>
 
-            <div className="hidden min-w-0 items-center gap-2 rounded-full bg-white px-3 py-2 shadow-sm sm:flex sm:min-w-[320px] lg:min-w-[400px]">
+          <div className="pointer-events-none absolute inset-x-0 flex justify-center px-20">
+            <div className="pointer-events-auto hidden min-w-[280px] items-center gap-2 rounded bg-white px-3 py-1.5 shadow-sm sm:flex lg:min-w-[360px]">
               <span
                 aria-hidden="true"
-                className="material-symbols-outlined text-[18px] text-[#86868b]"
+                className="material-symbols-outlined text-[16px] text-[#86868b]"
               >
                 search
               </span>
               <input
                 type="search"
-                placeholder="Search Acme Inc."
-                className="w-full border-0 bg-transparent p-0 text-[14px] tracking-[-0.01em] text-[#1d1d1f] placeholder:text-[#86868b] focus:outline-none focus:ring-0"
+                placeholder="Buscar"
+                className="w-full border-0 bg-transparent p-0 text-[13px] tracking-[-0.01em] text-[#1d1d1f] placeholder:text-[#86868b] focus:outline-none focus:ring-0"
               />
-              <span className="rounded-full bg-[#e8e8ed] px-2 py-0.5 text-[11px] font-medium tracking-tight text-[#86868b]">
+              <span className="rounded-full bg-[#e8e8ed] px-2 py-0.5 text-[10px] font-medium tracking-tight text-[#86868b]">
                 ⌘K
               </span>
             </div>
@@ -196,128 +232,182 @@ export function DashboardPage() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="apple-focus-ring inline-flex size-9 items-center justify-center rounded-full bg-white text-[#86868b] shadow-sm transition-colors hover:text-[#1d1d1f]"
+              className="apple-focus-ring inline-flex items-center gap-2 rounded-[0.7rem] bg-primary px-4 py-2 text-[12px] font-medium tracking-[-0.01em] text-white transition-all hover:opacity-90 active:scale-95"
+            >
+              <span
+                aria-hidden="true"
+                className="material-symbols-outlined text-[16px]"
+              >
+                save
+              </span>
+              {pageActionLabel}
+            </button>
+            <button
+              type="button"
+              className="apple-focus-ring inline-flex size-8 items-center justify-center text-[#86868b] transition-colors hover:text-[#1d1d1f]"
               aria-label="Notificações"
-            >
-              <span aria-hidden="true" className="material-symbols-outlined">
-                notifications
-              </span>
-            </button>
-            <button
-              type="button"
-              className="apple-focus-ring inline-flex size-9 items-center justify-center rounded-full bg-white text-[#86868b] shadow-sm transition-colors hover:text-[#1d1d1f]"
-              aria-label="Ajuda"
-            >
-              <span aria-hidden="true" className="material-symbols-outlined">
-                help
-              </span>
-            </button>
-            <button
-              type="button"
-              className="apple-focus-ring hidden items-center gap-2 rounded-full bg-[#1d1d1f] px-4 py-2 text-[14px] font-medium tracking-[-0.01em] text-white transition-colors hover:bg-[#0f1923] sm:inline-flex"
             >
               <span
                 aria-hidden="true"
                 className="material-symbols-outlined text-[18px]"
               >
-                smart_toy
+                notifications
               </span>
-              AI Assistant
             </button>
-            <div className="flex items-center gap-2 rounded-full bg-white px-2 py-1 shadow-sm">
-              <div className="flex size-8 items-center justify-center rounded-full bg-[#0f1923] text-[12px] font-semibold tracking-tight text-white">
+            <div ref={profileMenuRef} className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsProfileOpen((current) => !current)
+                }}
+                className="apple-focus-ring inline-flex size-8 items-center justify-center rounded-full bg-[#0f1923] text-[11px] font-semibold tracking-tight text-white transition-transform hover:scale-[1.02]"
+                aria-label="Abrir menu do perfil"
+                aria-expanded={isProfileOpen}
+              >
                 {initials}
-              </div>
-              <span className="hidden max-w-[140px] truncate text-[13px] font-medium tracking-[-0.01em] text-[#1d1d1f] lg:inline">
-                {user?.name ?? user?.email ?? 'Consultor'}
-              </span>
+              </button>
+              {isProfileOpen ? (
+                <div className="absolute right-0 top-full z-30 mt-2 w-56 rounded-[0.7rem] bg-white p-2 shadow-[rgba(0,0,0,0.16)_0px_10px_30px]">
+                  <div className="border-b border-black/8 px-2 pb-2 pt-1">
+                    <p className="truncate text-[12px] font-medium tracking-[-0.01em] text-[#1d1d1f]">
+                      {user?.email ?? 'consultor@daton.ai'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsProfileOpen(false)
+                      void logout()
+                    }}
+                    className="apple-focus-ring mt-2 inline-flex w-full items-center gap-2 rounded-[0.7rem] px-2 py-2 text-left text-[12px] font-medium tracking-[-0.01em] text-[#1d1d1f] transition-colors hover:bg-black/[0.04]"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="material-symbols-outlined text-[16px] text-[#86868b]"
+                    >
+                      logout
+                    </span>
+                    Sair
+                  </button>
+                </div>
+              ) : null}
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                void logout()
-              }}
-              className="apple-focus-ring inline-flex items-center rounded-full bg-white px-3 py-2 text-[13px] font-medium tracking-[-0.01em] text-[#1d1d1f] shadow-sm transition-colors hover:bg-black/[0.03]"
-            >
-              Sair
-            </button>
           </div>
         </header>
 
-        <div className="flex-1 overflow-hidden p-5">
-          <div className="no-scrollbar relative flex h-full flex-col overflow-y-auto rounded-xl bg-white">
-            <div className="sticky top-0 z-10 flex items-end justify-between bg-white/90 px-6 pb-6 pt-8 backdrop-blur-md sm:px-10 sm:pt-10">
-              <div>
-                <h2 className="text-[28px] font-semibold tracking-[-0.02em] text-[#1d1d1f]">
-                  Indicadores
-                </h2>
-                <p className="mt-1 text-[15px] font-normal tracking-[-0.01em] text-[#86868b]">
-                  Acompanhamento de métricas ESG granulares
-                </p>
-              </div>
-
-              <button
-                type="button"
-                className="apple-focus-ring inline-flex items-center gap-2 rounded-full bg-primary px-6 py-2.5 text-[14px] font-medium tracking-[-0.01em] text-white transition-all hover:opacity-90 active:scale-95"
-              >
-                <span
-                  aria-hidden="true"
-                  className="material-symbols-outlined text-[18px]"
+        <div className="flex min-h-0 flex-1 overflow-x-visible overflow-y-hidden">
+          <aside className="relative z-30 hidden h-full w-[64px] flex-shrink-0 bg-[#e8e8ed] px-2 py-4 md:block">
+            <nav className="no-scrollbar h-full space-y-1 overflow-x-visible overflow-y-auto pt-1">
+              {sidebarItems.map((item) => (
+                <div
+                  key={item.label}
+                  className="group relative flex justify-center"
                 >
-                  save
-                </span>
-                Salvar Alterações
-              </button>
-            </div>
+                  <button
+                    type="button"
+                    aria-label={item.label}
+                    title={item.label}
+                    onMouseEnter={(event) => {
+                      showSidebarTooltip(event, item.label)
+                    }}
+                    onFocus={(event) => {
+                      showSidebarTooltip(event, item.label)
+                    }}
+                    onMouseLeave={() => {
+                      setSidebarTooltip(null)
+                    }}
+                    onBlur={() => {
+                      setSidebarTooltip(null)
+                    }}
+                    className={`flex size-9 items-center justify-center rounded-[0.7rem] transition-colors ${
+                      item.active
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-[#1d1d1f] hover:bg-black/5'
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`material-symbols-outlined text-[18px] ${
+                        item.active ? '' : 'text-[#86868b]'
+                      }`}
+                      style={
+                        item.active
+                          ? { fontVariationSettings: "'FILL' 1" }
+                          : undefined
+                      }
+                    >
+                      {item.icon}
+                    </span>
+                  </button>
+                </div>
+              ))}
+            </nav>
+          </aside>
 
-            <div className="space-y-12 px-6 pb-20 sm:px-10">
-              {indicatorSections.map((section) => (
-                <section key={section.title}>
-                  <div className="sticky top-[96px] z-[1] mb-4 bg-white/95 py-3 backdrop-blur-sm">
-                    <h3 className="flex items-center gap-2 text-[19px] font-medium tracking-[-0.015em] text-[#1d1d1f]">
+          <main className="flex-1 overflow-hidden pb-5 pr-5">
+            <div className="no-scrollbar relative flex h-full flex-col overflow-y-auto rounded-lg bg-white">
+              <div className="space-y-8 px-6 pt-9 pb-6 sm:px-10">
+                {indicatorSections.map((section) => (
+                  <section key={section.title} className="space-y-4">
+                    <h3 className="flex items-center gap-2 text-[16px] font-medium tracking-[-0.015em] text-[#1d1d1f]">
                       <span
                         aria-hidden="true"
                         className={`size-2 rounded-full ${section.color}`}
                       />
                       {section.title}
                     </h3>
-                  </div>
 
-                  <div className="flex flex-col gap-1 rounded-xl bg-white/50 p-1">
-                    {section.items.map((item) => (
-                      <div
-                        key={`${section.title}-${item.code}`}
-                        className="group flex items-center justify-between rounded-xl px-5 py-4 transition-colors hover:bg-[#e8e8ed]/40"
-                      >
-                        <div className="flex flex-col">
-                          <span className="text-[15px] font-medium tracking-[-0.01em] text-[#1d1d1f]">
-                            {item.label}
-                          </span>
-                          <span className="text-[13px] text-[#86868b]">
-                            {item.code}
-                          </span>
-                        </div>
+                    <div className="flex flex-col gap-1">
+                      {section.items.map((item) => (
+                        <div
+                          key={`${section.title}-${item.code}`}
+                          className="group flex items-center justify-between rounded-xl px-5 py-3.5 transition-colors hover:bg-[#e8e8ed]/40"
+                        >
+                          <div className="flex flex-col">
+                            <span className="text-[13px] font-medium tracking-[-0.01em] text-[#1d1d1f]">
+                              {item.label}
+                            </span>
+                            <span className="text-[12px] text-[#86868b]">
+                              {item.code}
+                            </span>
+                          </div>
 
-                        <div className="flex items-center gap-4">
-                          <input
-                            type="text"
-                            defaultValue={item.value}
-                            placeholder="0"
-                            className="apple-focus-ring w-40 rounded-full border-0 bg-[#e8e8ed] px-5 py-2 text-right text-[15px] font-semibold text-[#1d1d1f] transition-all focus:ring-2 focus:ring-primary/20"
-                          />
-                          <span className="w-12 text-[13px] font-medium text-[#86868b]">
-                            {item.unit}
-                          </span>
+                          <div className="flex items-center gap-4">
+                            {/* TODO: replace this uncontrolled input with page state or refs when the save action is implemented. */}
+                            <input
+                              type="text"
+                              defaultValue={item.value}
+                              placeholder="0"
+                              className="apple-focus-ring w-36 rounded border-0 bg-[#e8e8ed] px-4 py-1.5 text-right text-[13px] font-semibold text-[#1d1d1f] transition-all focus:ring-2 focus:ring-primary/20"
+                            />
+                            <span className="w-12 text-[12px] font-medium text-[#86868b]">
+                              {item.unit}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ))}
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
             </div>
-          </div>
+          </main>
         </div>
-      </main>
+      </div>
+      {sidebarTooltip && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              className="pointer-events-none fixed z-[9999] -translate-y-1/2 rounded-full bg-[#1d1d1f] px-3 py-1 text-[11px] font-medium tracking-[-0.01em] text-white shadow-lg"
+              style={{
+                left: `${sidebarTooltip.left}px`,
+                top: `${sidebarTooltip.top}px`,
+              }}
+            >
+              {sidebarTooltip.label}
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   )
 }

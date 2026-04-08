@@ -13,7 +13,7 @@ export default {
         display: ['Inter', 'sans-serif'],
       },
       borderRadius: {
-        DEFAULT: '0.5rem',
+        DEFAULT: '0.7rem',
         lg: '1rem',
         xl: '1.5rem',
         full: '9999px',

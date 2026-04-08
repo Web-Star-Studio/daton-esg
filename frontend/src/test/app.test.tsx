@@ -28,6 +28,7 @@ function createAuthState(
       async () => undefined
     ) as MockAuthState['completeNewPassword'],
     logout: vi.fn(async () => undefined) as MockAuthState['logout'],
+    resetPendingChallenge: vi.fn() as MockAuthState['resetPendingChallenge'],
     ...overrides,
   }
 }

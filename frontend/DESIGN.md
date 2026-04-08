@@ -21,7 +21,7 @@ in component composition.
 ## 2. Tailwind Theme Tokens
 
 These values are the current source of truth from
-[frontend/tailwind.config.js](/Users/webstar/Daton/daton-esg/frontend/tailwind.config.js).
+`frontend/tailwind.config.js`.
 
 ### Dark mode
 
@@ -39,7 +39,7 @@ These values are the current source of truth from
 
 ### Border radius
 
-- `DEFAULT: 0.5rem` (`8px`)
+- `DEFAULT: 0.7rem` (`11.2px`)
 - `lg: 1rem` (`16px`)
 - `xl: 1.5rem` (`24px`)
 - `full: 9999px`
@@ -124,7 +124,7 @@ SF Pro-like stack must be reflected first in Tailwind and then in this file.
 - Background: `primary` (`#0673e0`)
 - Text: `#ffffff`
 - Height: `48px`
-- Radius: `lg` (`16px`) when following the current auth template
+- Radius: `DEFAULT` (`0.7rem`) or `lg` (`16px`) depending on button emphasis
 - Hover: darker blue shift
 - Focus: `ring-4` with `primary/20` or `primary/30`
 
@@ -142,7 +142,7 @@ SF Pro-like stack must be reflected first in Tailwind and then in this file.
 - Border: `1px solid #d2d2d7`
 - Text: `#1d1d1f`
 - Placeholder: `#86868b`
-- Radius: `lg` (`16px`)
+- Radius: `DEFAULT` (`0.7rem`)
 - Focus:
   - border color: `primary`
   - ring: `4px primary/20`
@@ -187,14 +187,14 @@ SF Pro-like stack must be reflected first in Tailwind and then in this file.
 
 These are the current official radius tokens:
 
-- `rounded`: `8px`
+- `rounded`: `11.2px`
 - `rounded-lg`: `16px`
 - `rounded-xl`: `24px`
 - `rounded-full`: `9999px`
 
 ### Usage guidance
 
-- Inputs: `rounded-lg`
+- Inputs: `rounded`
 - Primary auth buttons: `rounded-lg`
 - Basic cards: `rounded` or `rounded-lg`
 - Pills and lightweight action links: `rounded-full`

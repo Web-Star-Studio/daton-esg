@@ -15,9 +15,11 @@ export function SiteHeader() {
         </Link>
 
         <nav className="flex items-center gap-4 text-[12px] font-normal leading-[1.47] tracking-[-0.08px] text-white/80">
-          <Link to="/dashboard" className="apple-focus-ring hover:text-white">
-            Dashboard
-          </Link>
+          {isAuthenticated ? (
+            <Link to="/dashboard" className="apple-focus-ring hover:text-white">
+              Dashboard
+            </Link>
+          ) : null}
           {isAuthenticated ? (
             <>
               <span className="hidden text-white/64 sm:inline">

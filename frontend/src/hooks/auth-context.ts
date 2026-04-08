@@ -10,6 +10,7 @@ export type AuthContextValue = {
   login: (email: string, password: string) => Promise<void>
   completeNewPassword: (newPassword: string) => Promise<void>
   logout: () => Promise<void>
+  resetPendingChallenge: () => void
   user: AuthenticatedUser | null
 }
 

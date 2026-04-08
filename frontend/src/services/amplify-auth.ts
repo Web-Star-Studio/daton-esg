@@ -94,10 +94,6 @@ export async function getCurrentAuthTokens() {
 }
 
 function mapAdditionalSignInStep(nextStep?: string): never {
-  if (nextStep === 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED') {
-    throw new Error('Sua conta exige definição de nova senha antes do acesso.')
-  }
-
   if (
     nextStep === 'CONFIRM_SIGN_IN_WITH_SMS_CODE' ||
     nextStep === 'CONFIRM_SIGN_IN_WITH_TOTP_CODE'

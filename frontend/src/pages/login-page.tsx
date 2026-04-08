@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/use-auth'
 import { isAmplifyAuthConfigured } from '../services/amplify-auth'
 
@@ -40,7 +40,7 @@ function PasswordField({
         onChange={(event) => {
           onChange(event.target.value)
         }}
-        className="apple-focus-ring h-12 w-full rounded-lg border border-[#d2d2d7] bg-white px-4 pr-12 text-[17px] font-normal leading-[1.4] tracking-[-0.01em] text-[#1d1d1f] shadow-sm placeholder:text-[#86868b] focus:border-[#0071e3] focus:ring-4 focus:ring-[#0071e3]/20"
+        className="apple-focus-ring h-12 w-full rounded border border-[#d2d2d7] bg-white px-4 pr-12 text-[17px] font-normal leading-[1.4] tracking-[-0.01em] text-[#1d1d1f] shadow-sm placeholder:text-[#86868b] focus:border-[#0071e3] focus:ring-4 focus:ring-[#0071e3]/20"
         placeholder={placeholder}
         required
       />
@@ -68,7 +68,9 @@ export function LoginPage() {
     isAuthenticated,
     isLoading,
     login,
+    logout,
     pendingChallenge,
+    resetPendingChallenge,
   } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -169,7 +171,7 @@ export function LoginPage() {
                   setEmail(event.target.value)
                 }}
                 readOnly={isNewPasswordStep}
-                className="apple-focus-ring h-12 w-full rounded-lg border border-[#d2d2d7] bg-white px-4 text-[17px] font-normal leading-[1.4] tracking-[-0.01em] text-[#1d1d1f] shadow-sm placeholder:text-[#86868b] focus:border-[#0071e3] focus:ring-4 focus:ring-[#0071e3]/20 read-only:cursor-not-allowed read-only:bg-[#f5f5f7]"
+                className="apple-focus-ring h-12 w-full rounded border border-[#d2d2d7] bg-white px-4 text-[17px] font-normal leading-[1.4] tracking-[-0.01em] text-[#1d1d1f] shadow-sm placeholder:text-[#86868b] focus:border-[#0071e3] focus:ring-4 focus:ring-[#0071e3]/20 read-only:cursor-not-allowed read-only:bg-[#f5f5f7]"
                 placeholder="E-mail corporativo"
                 required
               />
@@ -242,12 +244,17 @@ export function LoginPage() {
 
             <div className="flex items-center justify-center pt-4">
               {isNewPasswordStep ? (
-                <Link
-                  to="/login"
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetPendingChallenge()
+                    void logout()
+                    navigate('/login', { replace: true })
+                  }}
                   className="apple-focus-ring text-[14px] font-medium tracking-normal text-[#0673e0] transition-colors hover:text-blue-700 hover:underline"
                 >
                   Voltar para o login &gt;
-                </Link>
+                </button>
               ) : (
                 <button
                   type="button"
