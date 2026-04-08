@@ -5,13 +5,18 @@ import {
   setApiAuthToken,
 } from '../services/api-client'
 import {
+  completeNewPasswordChallenge,
   getCurrentAuthTokens,
   isAmplifyAuthConfigured,
   signInWithEmailPassword,
   signOutFromCognito,
 } from '../services/amplify-auth'
 import { AuthContext } from '../hooks/auth-context'
-import type { AuthenticatedUser, AuthTokens } from '../types/auth'
+import type {
+  AuthenticatedUser,
+  AuthTokens,
+  PendingAuthChallenge,
+} from '../types/auth'
 
 function normalizeAuthError(error: unknown) {
   if (error instanceof ApiError) {
@@ -29,6 +34,12 @@ function normalizeAuthError(error: unknown) {
       return new Error('Email ou senha inválidos.')
     }
 
+    if (error.name === 'InvalidPasswordException') {
+      return new Error(
+        'A nova senha não atende à política configurada no Cognito.'
+      )
+    }
+
     return error
   }
 
@@ -43,6 +54,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(null)
   const [idToken, setIdToken] = useState<string | null>(null)
   const [user, setUser] = useState<AuthenticatedUser | null>(null)
+  const [pendingChallenge, setPendingChallenge] =
+    useState<PendingAuthChallenge | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -54,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (active) {
           setAccessToken(null)
           setIdToken(null)
+          setPendingChallenge(null)
           setUser(null)
           setIsLoading(false)
         }
@@ -69,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (active) {
             setAccessToken(null)
             setIdToken(null)
+            setPendingChallenge(null)
             setUser(null)
             setIsLoading(false)
           }
@@ -84,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         setAccessToken(tokens.accessToken)
         setIdToken(tokens.idToken)
+        setPendingChallenge(null)
         setUser(currentUser)
       } catch {
         setApiAuthToken(null)
@@ -94,6 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         setAccessToken(null)
         setIdToken(null)
+        setPendingChallenge(null)
         setUser(null)
       } finally {
         if (active) {
@@ -111,9 +128,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function login(email: string, password: string) {
     setIsLoading(true)
+    setPendingChallenge(null)
 
     try {
-      const tokens = await signInWithEmailPassword(email, password)
+      const result = await signInWithEmailPassword(email, password)
+
+      if (result.status === 'new-password-required') {
+        setApiAuthToken(null)
+        setAccessToken(null)
+        setIdToken(null)
+        setUser(null)
+        setPendingChallenge(result.challenge)
+        return
+      }
+
+      const tokens = result.tokens
       const bearerToken = getBearerToken(tokens)
 
       if (!bearerToken) {
@@ -125,6 +154,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setAccessToken(tokens.accessToken)
       setIdToken(tokens.idToken)
+      setPendingChallenge(null)
+      setUser(currentUser)
+    } catch (error) {
+      setApiAuthToken(null)
+      setAccessToken(null)
+      setIdToken(null)
+      setUser(null)
+      throw normalizeAuthError(error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  async function completeNewPassword(newPassword: string) {
+    setIsLoading(true)
+
+    try {
+      const tokens = await completeNewPasswordChallenge(newPassword)
+      const bearerToken = getBearerToken(tokens)
+
+      if (!bearerToken) {
+        throw new Error('O Cognito não retornou um token utilizável.')
+      }
+
+      setApiAuthToken(bearerToken)
+      const currentUser = await fetchCurrentUser()
+
+      setAccessToken(tokens.accessToken)
+      setIdToken(tokens.idToken)
+      setPendingChallenge(null)
       setUser(currentUser)
     } catch (error) {
       setApiAuthToken(null)
@@ -148,6 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setApiAuthToken(null)
       setAccessToken(null)
       setIdToken(null)
+      setPendingChallenge(null)
       setUser(null)
       setIsLoading(false)
     }
@@ -157,11 +217,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         accessToken,
+        completeNewPassword,
         idToken,
         isAuthenticated: user !== null,
         isLoading,
         login,
         logout,
+        pendingChallenge,
         user,
       }}
     >

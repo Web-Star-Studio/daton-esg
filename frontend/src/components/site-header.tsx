@@ -8,16 +8,13 @@ export function SiteHeader() {
     <header className="apple-nav sticky top-0 z-50 border-b border-white/10">
       <div className="mx-auto flex h-12 w-full max-w-[1180px] items-center justify-between px-6 sm:px-10 lg:px-12">
         <Link
-          to="/"
+          to={isAuthenticated ? '/dashboard' : '/login'}
           className="apple-focus-ring text-[12px] font-normal leading-[1.47] tracking-[-0.08px] text-white"
         >
           Daton ESG
         </Link>
 
         <nav className="flex items-center gap-4 text-[12px] font-normal leading-[1.47] tracking-[-0.08px] text-white/80">
-          <Link to="/" className="apple-focus-ring hover:text-white">
-            Visão geral
-          </Link>
           <Link to="/dashboard" className="apple-focus-ring hover:text-white">
             Dashboard
           </Link>

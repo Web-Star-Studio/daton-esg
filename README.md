@@ -63,6 +63,7 @@ docker compose ps
 Follow logs when needed:
 
 ```bash
+docker compose logs -f frontend
 docker compose logs -f api
 docker compose logs -f postgres
 docker compose logs -f localstack
@@ -108,9 +109,10 @@ pnpm test --run
 
 ### AWS Cognito
 
-`US-2.1` covers Cognito provisioning only. At this stage, Cognito is an
-environment prerequisite for upcoming authentication stories, but it is not yet
-wired into the backend or frontend runtime.
+`US-2.1` covers Cognito provisioning and `US-2.2`/`US-2.3` wire Cognito into the
+backend and frontend runtime. The React app reads the values below from the
+monorepo root `.env`, and the Docker Compose frontend service proxies `/api`
+and `/health` to the backend through `VITE_API_PROXY_TARGET`.
 
 Use the actual User Pool region configured in AWS. The current team setup uses
 `sa-east-1`.
@@ -143,6 +145,7 @@ AWS_COGNITO_TEST_USER_EMAIL=consultor.dev@example.com
 VITE_AWS_COGNITO_REGION=sa-east-1
 VITE_AWS_COGNITO_USER_POOL_ID=sa-east-1_example123
 VITE_AWS_COGNITO_APP_CLIENT_ID=exampleclientid1234567890
+VITE_API_PROXY_TARGET=http://localhost:8000
 ```
 
 Notes:

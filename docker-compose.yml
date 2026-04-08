@@ -1,4 +1,27 @@
 services:
+  frontend:
+    image: node:22-bookworm
+    working_dir: /app/frontend
+    env_file:
+      - .env
+    environment:
+      VITE_AWS_COGNITO_REGION: ${VITE_AWS_COGNITO_REGION}
+      VITE_AWS_COGNITO_USER_POOL_ID: ${VITE_AWS_COGNITO_USER_POOL_ID}
+      VITE_AWS_COGNITO_APP_CLIENT_ID: ${VITE_AWS_COGNITO_APP_CLIENT_ID}
+      VITE_API_PROXY_TARGET: http://api:8000
+    command: >
+      sh -lc "corepack enable &&
+      pnpm install --frozen-lockfile &&
+      pnpm dev --host 0.0.0.0 --port 5173"
+    volumes:
+      - .:/app
+      - frontend_node_modules:/app/frontend/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      api:
+        condition: service_healthy
+
   api:
     build:
       context: ./backend
@@ -73,5 +96,6 @@ services:
       start_period: 15s
 
 volumes:
+  frontend_node_modules:
   postgres_data:
   localstack_data:
