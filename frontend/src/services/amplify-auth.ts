@@ -1,5 +1,6 @@
 import { Amplify } from 'aws-amplify'
 import {
+  confirmSignIn,
   fetchAuthSession,
   signIn,
   signOut,
@@ -7,7 +8,7 @@ import {
 } from 'aws-amplify/auth'
 import { cognitoUserPoolsTokenProvider } from 'aws-amplify/auth/cognito'
 import { sharedInMemoryStorage } from 'aws-amplify/utils'
-import type { AuthTokens } from '../types/auth'
+import type { AuthSignInResult, AuthTokens } from '../types/auth'
 
 type CognitoFrontendConfig = {
   region: string
@@ -92,7 +93,36 @@ export async function getCurrentAuthTokens() {
   return mapSessionTokens(session)
 }
 
-export async function signInWithEmailPassword(email: string, password: string) {
+function mapAdditionalSignInStep(nextStep?: string): never {
+  if (
+    nextStep === 'CONFIRM_SIGN_IN_WITH_SMS_CODE' ||
+    nextStep === 'CONFIRM_SIGN_IN_WITH_TOTP_CODE'
+  ) {
+    throw new Error('Sua conta exige MFA para concluir a autenticação.')
+  }
+
+  if (
+    nextStep === 'CONTINUE_SIGN_IN_WITH_EMAIL_SETUP' ||
+    nextStep === 'CONTINUE_SIGN_IN_WITH_MFA_SELECTION' ||
+    nextStep === 'CONTINUE_SIGN_IN_WITH_FIRST_FACTOR_SELECTION' ||
+    nextStep === 'CONFIRM_SIGN_UP'
+  ) {
+    throw new Error(
+      'Sua conta exige uma etapa adicional de verificação antes do acesso.'
+    )
+  }
+
+  throw new Error(
+    nextStep
+      ? `Fluxo de autenticação adicional não suportado nesta fase: ${nextStep}.`
+      : 'Fluxo de autenticação adicional não suportado nesta fase.'
+  )
+}
+
+export async function signInWithEmailPassword(
+  email: string,
+  password: string
+): Promise<AuthSignInResult> {
   ensureConfigured()
 
   const result = await signIn({
@@ -104,34 +134,34 @@ export async function signInWithEmailPassword(email: string, password: string) {
     const nextStep = result.nextStep?.signInStep
 
     if (nextStep === 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED') {
-      throw new Error(
-        'Sua conta exige definição de nova senha antes do acesso.'
-      )
+      return {
+        status: 'new-password-required',
+        challenge: {
+          type: 'NEW_PASSWORD_REQUIRED',
+          email,
+        },
+      }
     }
 
-    if (
-      nextStep === 'CONFIRM_SIGN_IN_WITH_SMS_CODE' ||
-      nextStep === 'CONFIRM_SIGN_IN_WITH_TOTP_CODE'
-    ) {
-      throw new Error('Sua conta exige MFA para concluir a autenticação.')
-    }
+    mapAdditionalSignInStep(nextStep)
+  }
 
-    if (
-      nextStep === 'CONTINUE_SIGN_IN_WITH_EMAIL_SETUP' ||
-      nextStep === 'CONTINUE_SIGN_IN_WITH_MFA_SELECTION' ||
-      nextStep === 'CONTINUE_SIGN_IN_WITH_FIRST_FACTOR_SELECTION' ||
-      nextStep === 'CONFIRM_SIGN_UP'
-    ) {
-      throw new Error(
-        'Sua conta exige uma etapa adicional de verificação antes do acesso.'
-      )
-    }
+  const session = await fetchAuthSession()
+  return {
+    status: 'signed-in',
+    tokens: mapSessionTokens(session),
+  }
+}
 
-    throw new Error(
-      nextStep
-        ? `Fluxo de autenticação adicional não suportado nesta fase: ${nextStep}.`
-        : 'Fluxo de autenticação adicional não suportado nesta fase.'
-    )
+export async function completeNewPasswordChallenge(newPassword: string) {
+  ensureConfigured()
+
+  const result = await confirmSignIn({
+    challengeResponse: newPassword,
+  })
+
+  if (!result.isSignedIn) {
+    mapAdditionalSignInStep(result.nextStep?.signInStep)
   }
 
   const session = await fetchAuthSession()

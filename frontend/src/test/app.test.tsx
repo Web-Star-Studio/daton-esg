@@ -21,9 +21,14 @@ function createAuthState(
     idToken: null,
     isAuthenticated: false,
     isLoading: false,
+    pendingChallenge: null,
     user: null,
     login: vi.fn(async () => undefined) as MockAuthState['login'],
+    completeNewPassword: vi.fn(
+      async () => undefined
+    ) as MockAuthState['completeNewPassword'],
     logout: vi.fn(async () => undefined) as MockAuthState['logout'],
+    resetPendingChallenge: vi.fn() as MockAuthState['resetPendingChallenge'],
     ...overrides,
   }
 }
@@ -52,15 +57,16 @@ describe('App', () => {
     )
   }
 
-  it('renders the public home route', () => {
+  it('redirects the public root route to /login', async () => {
     mockUseAuth.mockReturnValue(createAuthState())
 
     renderApp('/')
 
-    expect(
-      screen.getByText(/acesso seguro para operar relatórios esg/i)
-    ).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /^entrar$/i })).toBeInTheDocument()
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /acesse sua conta/i })
+      ).toBeInTheDocument()
+    })
   })
 
   it('renders the login page for unauthenticated users', () => {
@@ -69,10 +75,10 @@ describe('App', () => {
     renderApp('/login')
 
     expect(
-      screen.getByRole('heading', { name: /entre com sua conta worton/i })
+      screen.getByRole('heading', { name: /acesse sua conta/i })
     ).toBeInTheDocument()
-    expect(screen.getByLabelText(/email/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/senha/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/^e-mail corporativo$/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/^senha$/i)).toBeInTheDocument()
   })
 
   it('redirects unauthenticated users from /dashboard to /login', async () => {
@@ -82,7 +88,7 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole('heading', { name: /entre com sua conta worton/i })
+        screen.getByRole('heading', { name: /acesse sua conta/i })
       ).toBeInTheDocument()
     })
   })
@@ -108,7 +114,7 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole('heading', { name: /workspace liberado/i })
+        screen.getByRole('heading', { name: /indicadores/i })
       ).toBeInTheDocument()
     })
   })
@@ -122,19 +128,73 @@ describe('App', () => {
 
     renderApp('/login')
 
-    fireEvent.change(screen.getByLabelText(/email/i), {
+    fireEvent.change(screen.getByLabelText(/^e-mail corporativo$/i), {
       target: { value: 'consultor@example.com' },
     })
-    fireEvent.change(screen.getByLabelText(/senha/i), {
+    fireEvent.change(screen.getByLabelText(/^senha$/i), {
       target: { value: 'SenhaErrada123!' },
     })
-    fireEvent.click(
-      screen.getByRole('button', { name: /entrar com segurança/i })
-    )
+    fireEvent.click(screen.getByRole('button', { name: /^entrar$/i }))
 
     await waitFor(() => {
       expect(screen.getByText(/email ou senha inválidos/i)).toBeInTheDocument()
     })
+  })
+
+  it('switches to the new password step when Cognito requires it', () => {
+    mockUseAuth.mockReturnValue(
+      createAuthState({
+        pendingChallenge: {
+          type: 'NEW_PASSWORD_REQUIRED',
+          email: 'dev@webstar.studio',
+        },
+      })
+    )
+
+    renderApp('/login')
+
+    expect(
+      screen.getByRole('heading', { name: /defina sua nova senha/i })
+    ).toBeInTheDocument()
+    expect(screen.getByDisplayValue('dev@webstar.studio')).toHaveAttribute(
+      'readonly'
+    )
+    expect(screen.getByLabelText(/confirmar nova senha/i)).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /definir nova senha/i })
+    ).toBeInTheDocument()
+  })
+
+  it('shows an inline error when the new password confirmation does not match', async () => {
+    const completeNewPassword = vi.fn(async () => undefined)
+
+    mockUseAuth.mockReturnValue(
+      createAuthState({
+        pendingChallenge: {
+          type: 'NEW_PASSWORD_REQUIRED',
+          email: 'dev@webstar.studio',
+        },
+        completeNewPassword,
+      })
+    )
+
+    renderApp('/login')
+
+    fireEvent.change(screen.getByLabelText(/^nova senha$/i), {
+      target: { value: 'NovaSenha123!' },
+    })
+    fireEvent.change(screen.getByLabelText(/confirmar nova senha/i), {
+      target: { value: 'OutraSenha123!' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /definir nova senha/i }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/a confirmação da nova senha não confere/i)
+      ).toBeInTheDocument()
+    })
+
+    expect(completeNewPassword).not.toHaveBeenCalled()
   })
 
   it('disables the submit button and shows loading copy while auth is loading', () => {
@@ -175,19 +235,58 @@ describe('App', () => {
 
     renderApp('/login')
 
-    fireEvent.change(screen.getByLabelText(/email/i), {
+    fireEvent.change(screen.getByLabelText(/^e-mail corporativo$/i), {
       target: { value: 'consultora@example.com' },
     })
-    fireEvent.change(screen.getByLabelText(/senha/i), {
+    fireEvent.change(screen.getByLabelText(/^senha$/i), {
       target: { value: 'SenhaSegura123!' },
     })
-    fireEvent.click(
-      screen.getByRole('button', { name: /entrar com segurança/i })
-    )
+    fireEvent.click(screen.getByRole('button', { name: /^entrar$/i }))
 
     await waitFor(() => {
       expect(
-        screen.getByRole('heading', { name: /workspace liberado/i })
+        screen.getByRole('heading', { name: /indicadores/i })
+      ).toBeInTheDocument()
+    })
+  })
+
+  it('redirects after completing the new password challenge successfully', async () => {
+    const authState = createAuthState({
+      pendingChallenge: {
+        type: 'NEW_PASSWORD_REQUIRED',
+        email: 'dev@webstar.studio',
+      },
+      completeNewPassword: vi.fn(async () => {
+        authState.pendingChallenge = null
+        authState.isAuthenticated = true
+        authState.accessToken = 'access-token'
+        authState.idToken = 'id-token'
+        authState.user = {
+          id: 'user-3',
+          cognito_sub: 'cognito-sub-3',
+          name: 'Dev User',
+          email: 'dev@webstar.studio',
+          role: 'consultant',
+          created_at: '2026-04-06T00:00:00Z',
+        }
+      }),
+    })
+
+    mockUseAuth.mockImplementation(() => authState)
+
+    renderApp('/login')
+
+    fireEvent.change(screen.getByLabelText(/^nova senha$/i), {
+      target: { value: 'NovaSenha123!' },
+    })
+    fireEvent.change(screen.getByLabelText(/confirmar nova senha/i), {
+      target: { value: 'NovaSenha123!' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /definir nova senha/i }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /indicadores/i })
       ).toBeInTheDocument()
     })
   })
