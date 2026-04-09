@@ -1,4 +1,10 @@
 import type { AuthenticatedUser } from '../types/auth'
+import type {
+  CreateProjectDocumentUploadInput,
+  ProjectDocument,
+  ProjectDocumentUploadSession,
+  ProjectRecord,
+} from '../types/project'
 
 let authToken: string | null = null
 
@@ -29,6 +35,18 @@ async function apiFetch(path: string, init: RequestInit = {}) {
   })
 }
 
+async function parseApiError(
+  response: Response,
+  fallbackMessage: string
+): Promise<ApiError> {
+  try {
+    const payload = (await response.json()) as { detail?: string }
+    return new ApiError(payload.detail ?? fallbackMessage, response.status)
+  } catch {
+    return new ApiError(fallbackMessage, response.status)
+  }
+}
+
 export async function fetchCurrentUser() {
   const response = await apiFetch('/api/v1/auth/me')
 
@@ -42,4 +60,136 @@ export async function fetchCurrentUser() {
   }
 
   return (await response.json()) as AuthenticatedUser
+}
+
+export async function fetchProject(projectId: string) {
+  const response = await apiFetch(`/api/v1/projects/${projectId}`)
+
+  if (!response.ok) {
+    throw await parseApiError(
+      response,
+      `Falha ao carregar o projeto (${response.status}).`
+    )
+  }
+
+  return (await response.json()) as ProjectRecord
+}
+
+export async function fetchProjectDocuments(projectId: string) {
+  const response = await apiFetch(`/api/v1/projects/${projectId}/documents`)
+
+  if (!response.ok) {
+    throw await parseApiError(
+      response,
+      `Falha ao carregar os documentos (${response.status}).`
+    )
+  }
+
+  return (await response.json()) as ProjectDocument[]
+}
+
+export async function createProjectDocumentUpload(
+  projectId: string,
+  payload: CreateProjectDocumentUploadInput
+) {
+  const response = await apiFetch(`/api/v1/projects/${projectId}/documents`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    throw await parseApiError(
+      response,
+      `Falha ao preparar o upload (${response.status}).`
+    )
+  }
+
+  return (await response.json()) as ProjectDocumentUploadSession
+}
+
+export async function confirmProjectDocumentUpload(
+  projectId: string,
+  documentId: string
+) {
+  const response = await apiFetch(
+    `/api/v1/projects/${projectId}/documents/${documentId}/confirm`,
+    {
+      method: 'POST',
+    }
+  )
+
+  if (!response.ok) {
+    throw await parseApiError(
+      response,
+      `Falha ao confirmar o upload (${response.status}).`
+    )
+  }
+
+  return (await response.json()) as ProjectDocument
+}
+
+export async function deleteProjectDocument(
+  projectId: string,
+  documentId: string
+) {
+  const response = await apiFetch(
+    `/api/v1/projects/${projectId}/documents/${documentId}`,
+    {
+      method: 'DELETE',
+    }
+  )
+
+  if (!response.ok) {
+    throw await parseApiError(
+      response,
+      `Falha ao remover o documento (${response.status}).`
+    )
+  }
+}
+
+export function uploadFileToPresignedUrl(
+  file: File,
+  uploadUrl: string,
+  contentType: string,
+  onProgress?: (progress: number) => void
+) {
+  return new Promise<void>((resolve, reject) => {
+    const request = new XMLHttpRequest()
+
+    request.open('PUT', uploadUrl)
+    request.setRequestHeader('Content-Type', contentType)
+
+    request.upload.addEventListener('progress', (event) => {
+      if (!event.lengthComputable || !onProgress) {
+        return
+      }
+
+      const progress = Math.round((event.loaded / event.total) * 100)
+      onProgress(progress)
+    })
+
+    request.addEventListener('load', () => {
+      if (request.status >= 200 && request.status < 300) {
+        onProgress?.(100)
+        resolve()
+        return
+      }
+
+      reject(new Error(`Upload falhou com status ${request.status}.`))
+    })
+
+    request.addEventListener('error', () => {
+      reject(new Error('Não foi possível enviar o arquivo para o storage.'))
+    })
+
+    request.addEventListener('abort', () => {
+      onProgress?.(0)
+      reject(new Error('Upload aborted'))
+    })
+
+    request.send(file)
+  })
 }

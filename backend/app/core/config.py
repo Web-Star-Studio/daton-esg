@@ -74,6 +74,27 @@ class Settings(BaseSettings):
             )
         )
 
+    @field_validator("aws_endpoint_url", mode="after")
+    @classmethod
+    def normalize_aws_endpoint_url(cls, value: str) -> str:
+        if cls.is_container_environment():
+            return value
+
+        parsed = urlsplit(value)
+        if parsed.hostname != "localstack":
+            return value
+
+        port = parsed.port or 4566
+        return urlunsplit(
+            (
+                parsed.scheme,
+                f"localhost:{port}",
+                parsed.path,
+                parsed.query,
+                parsed.fragment,
+            )
+        )
+
     @staticmethod
     def is_container_environment() -> bool:
         return (

@@ -3,6 +3,7 @@ import { ProtectedRoute } from './components/protected-route'
 import { useAuth } from './hooks/use-auth'
 import { DashboardPage } from './pages/dashboard-page'
 import { LoginPage } from './pages/login-page'
+import { ProjectDocumentsPage } from './pages/project-documents-page'
 
 function FallbackRoute() {
   const { isAuthenticated, isLoading } = useAuth()
@@ -24,6 +25,14 @@ function App() {
         element={
           <ProtectedRoute>
             <DashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/projects/:projectId"
+        element={
+          <ProtectedRoute>
+            <ProjectDocumentsPage />
           </ProtectedRoute>
         }
       />
