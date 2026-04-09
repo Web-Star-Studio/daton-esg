@@ -36,6 +36,7 @@ export function ProjectDocumentsPage() {
     useProjectWorkspace()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const uploadFilesRef = useRef<Map<string, File>>(new Map())
+  const activeProjectIdRef = useRef<string | null>(currentProjectId || null)
   const [documents, setDocuments] = useState<ProjectDocument[]>([])
   const [uploads, setUploads] = useState<PendingUpload[]>([])
   const [validationMessage, setValidationMessage] = useState<string | null>(
@@ -69,8 +70,13 @@ export function ProjectDocumentsPage() {
   })
 
   useEffect(() => {
+    activeProjectIdRef.current = currentProjectId || null
+
     if (!currentProjectId) {
       setDocuments([])
+      setUploads([])
+      uploadFilesRef.current = new Map()
+      setValidationMessage(null)
       setPageError('Projeto inválido.')
       setIsLoading(false)
       return
@@ -80,6 +86,9 @@ export function ProjectDocumentsPage() {
 
     async function loadDocuments() {
       setDocuments([])
+      setUploads([])
+      uploadFilesRef.current = new Map()
+      setValidationMessage(null)
       setIsLoading(true)
 
       try {
@@ -116,9 +125,12 @@ export function ProjectDocumentsPage() {
     }
   }, [currentProjectId])
 
-  async function refreshDocuments(currentProjectId: string) {
+  async function refreshDocuments(expectedProjectId: string) {
     try {
-      const nextDocuments = await fetchProjectDocuments(currentProjectId)
+      const nextDocuments = await fetchProjectDocuments(expectedProjectId)
+      if (activeProjectIdRef.current !== expectedProjectId) {
+        return
+      }
       setDocuments(nextDocuments)
     } catch (error) {
       console.error('Failed to refresh project documents', error)

@@ -272,9 +272,11 @@ describe('project pages', () => {
       expect(screen.getByText('inventario.pdf')).toBeInTheDocument()
     })
 
-    expect(
-      screen.getByRole('button', { name: /gerar relatório/i })
-    ).toBeDisabled()
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /gerar relatório/i })
+      ).toBeDisabled()
+    })
   })
 
   it('preserves the current subroute when changing project from the selector', async () => {

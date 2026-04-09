@@ -6,8 +6,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.enums import OrganizationSize, ProjectStatus
 
-CURRENT_YEAR = date.today().year
-
 
 def _normalize_optional_text(value: str | None) -> str | None:
     if value is None:
@@ -22,7 +20,7 @@ class ProjectCreate(BaseModel):
     org_sector: str | None = None
     org_size: OrganizationSize | None = None
     org_location: str | None = None
-    base_year: int = Field(ge=1900, le=CURRENT_YEAR)
+    base_year: int = Field(ge=1900)
     scope: str | None = None
 
     @field_validator("org_name")
@@ -38,13 +36,21 @@ class ProjectCreate(BaseModel):
     def normalize_optional_text(cls, value: str | None) -> str | None:
         return _normalize_optional_text(value)
 
+    @field_validator("base_year")
+    @classmethod
+    def validate_base_year(cls, value: int) -> int:
+        current_year = date.today().year
+        if value > current_year:
+            raise ValueError(f"Base year must be less than or equal to {current_year}")
+        return value
+
 
 class ProjectUpdate(BaseModel):
     org_name: str | None = None
     org_sector: str | None = None
     org_size: OrganizationSize | None = None
     org_location: str | None = None
-    base_year: int | None = Field(default=None, ge=1900, le=CURRENT_YEAR)
+    base_year: int | None = Field(default=None, ge=1900)
     scope: str | None = None
     status: ProjectStatus | None = None
     material_topics: dict[str, Any] | list[Any] | None = None
@@ -65,6 +71,17 @@ class ProjectUpdate(BaseModel):
     @classmethod
     def normalize_optional_text(cls, value: str | None) -> str | None:
         return _normalize_optional_text(value)
+
+    @field_validator("base_year")
+    @classmethod
+    def validate_base_year(cls, value: int | None) -> int | None:
+        if value is None:
+            return None
+
+        current_year = date.today().year
+        if value > current_year:
+            raise ValueError(f"Base year must be less than or equal to {current_year}")
+        return value
 
 
 class ProjectResponse(BaseModel):

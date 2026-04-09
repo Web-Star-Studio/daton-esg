@@ -33,6 +33,8 @@ export function ProjectFormPage({ mode }: ProjectFormPageProps) {
 
     async function loadProject() {
       setIsLoading(true)
+      setProject(null)
+      setPageError(null)
 
       try {
         const currentProject = await fetchProject(currentProjectId)
