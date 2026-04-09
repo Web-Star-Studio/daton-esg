@@ -154,9 +154,7 @@ def test_list_projects_passes_search_and_status_filters(
 
 
 @pytest.mark.parametrize("base_year", [1899, datetime.now(timezone.utc).year + 1])
-def test_create_project_rejects_invalid_base_year(
-    base_year: int, projects_app
-) -> None:
+def test_create_project_rejects_invalid_base_year(base_year: int, projects_app) -> None:
     app, _session, _user = projects_app
 
     with TestClient(app) as client:

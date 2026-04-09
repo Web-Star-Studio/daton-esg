@@ -50,8 +50,9 @@ async def test_list_projects_excludes_archived_by_default() -> None:
 
 
 @pytest.mark.asyncio
-async def test_list_projects_uses_explicit_status_filter_without_archived_default(
-) -> None:
+async def test_list_projects_uses_explicit_status_filter_without_archived_default() -> (
+    None
+):
     session = FakeSession()
     user_id = uuid4()
 
