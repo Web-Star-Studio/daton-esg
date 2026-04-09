@@ -13,6 +13,27 @@ export type ProjectRecord = {
   updated_at: string
 }
 
+export type ProjectCreateInput = {
+  org_name: string
+  org_sector: string | null
+  org_size: string | null
+  org_location: string | null
+  base_year: number
+  scope: string | null
+}
+
+export type ProjectUpdateInput = Partial<ProjectCreateInput> & {
+  material_topics?: Record<string, unknown> | Array<unknown> | null
+  sdg_goals?: Record<string, unknown> | Array<unknown> | null
+  status?: string
+}
+
+export type ProjectShellOption = {
+  id: string
+  href: string
+  name: string
+}
+
 export type ProjectDocument = {
   id: string
   project_id: string

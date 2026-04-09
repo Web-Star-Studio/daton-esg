@@ -2,6 +2,7 @@ import {
   type FocusEvent,
   type MouseEvent,
   type ReactNode,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -10,8 +11,11 @@ import {
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/use-auth'
+import { PrimaryBtn } from './primary-btn'
+import { SecondaryBtn } from './secondary-btn'
+import type { ProjectShellOption } from '../types/project'
 
-type SidebarItemKey =
+export type SidebarItemKey =
   | 'overview'
   | 'documents'
   | 'data'
@@ -26,20 +30,25 @@ type SidebarItemKey =
   | 'history'
   | 'branding'
 
-type PageAction = {
+export type PageAction = {
   disabled?: boolean
   label: string
   icon: string
   onClick: () => void
+  variant?: 'primary' | 'secondary'
 }
 
 type ProjectShellProps = {
   activeSidebarKey: SidebarItemKey
   children: ReactNode
   companyName: string
+  currentProjectId?: string
+  overviewHref?: string
   documentsHref?: string
-  pageAction?: PageAction
+  indicatorsHref?: string
+  pageActions?: PageAction[]
   pageTitle: string
+  projectOptions?: ProjectShellOption[]
 }
 
 const sidebarItems: Array<{
@@ -87,14 +96,22 @@ function getInitials(
 
 function getSidebarHref(
   itemKey: SidebarItemKey,
-  documentsHref: string | undefined
+  links: {
+    documentsHref?: string
+    indicatorsHref?: string
+    overviewHref?: string
+  }
 ) {
+  if (itemKey === 'overview') {
+    return links.overviewHref
+  }
+
   if (itemKey === 'indicators') {
-    return '/dashboard'
+    return links.indicatorsHref
   }
 
   if (itemKey === 'documents') {
-    return documentsHref
+    return links.documentsHref
   }
 
   return undefined
@@ -104,18 +121,29 @@ export function ProjectShell({
   activeSidebarKey,
   children,
   companyName,
+  currentProjectId,
+  overviewHref,
   documentsHref,
-  pageAction,
+  indicatorsHref,
+  pageActions = [],
   pageTitle,
+  projectOptions = [],
 }: ProjectShellProps) {
   const { logout, user } = useAuth()
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
+  const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false)
   const [sidebarTooltip, setSidebarTooltip] = useState<{
     label: string
     top: number
     left: number
   } | null>(null)
+  const [projectMenuPosition, setProjectMenuPosition] = useState<{
+    left: number
+    top: number
+  } | null>(null)
+  const projectMenuContentRef = useRef<HTMLDivElement | null>(null)
+  const projectMenuTriggerRef = useRef<HTMLButtonElement | null>(null)
   const profileMenuRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const initials = useMemo(
@@ -123,17 +151,40 @@ export function ProjectShell({
     [user?.email, user?.name]
   )
 
+  const updateProjectMenuPosition = useCallback(() => {
+    const trigger = projectMenuTriggerRef.current
+
+    if (!trigger) {
+      return
+    }
+
+    const rect = trigger.getBoundingClientRect()
+
+    setProjectMenuPosition({
+      left: rect.left,
+      top: rect.bottom + 8,
+    })
+  }, [])
+
   useEffect(() => {
-    if (!isProfileOpen) {
+    if (!isProfileOpen && !isProjectMenuOpen) {
       return
     }
 
     function handlePointerDown(event: PointerEvent) {
-      if (
-        profileMenuRef.current &&
-        !profileMenuRef.current.contains(event.target as Node)
-      ) {
+      const target = event.target as Node
+
+      if (profileMenuRef.current && !profileMenuRef.current.contains(target)) {
         setIsProfileOpen(false)
+      }
+
+      const clickedProjectTrigger =
+        projectMenuTriggerRef.current?.contains(target) ?? false
+      const clickedProjectMenu =
+        projectMenuContentRef.current?.contains(target) ?? false
+
+      if (!clickedProjectTrigger && !clickedProjectMenu) {
+        setIsProjectMenuOpen(false)
       }
     }
 
@@ -142,7 +193,28 @@ export function ProjectShell({
     return () => {
       document.removeEventListener('pointerdown', handlePointerDown)
     }
-  }, [isProfileOpen])
+  }, [isProfileOpen, isProjectMenuOpen])
+
+  useEffect(() => {
+    if (!isProjectMenuOpen) {
+      return
+    }
+
+    updateProjectMenuPosition()
+
+    function handleWindowChange() {
+      setIsProjectMenuOpen(false)
+      setProjectMenuPosition(null)
+    }
+
+    window.addEventListener('scroll', handleWindowChange, true)
+    window.addEventListener('resize', handleWindowChange)
+
+    return () => {
+      window.removeEventListener('scroll', handleWindowChange, true)
+      window.removeEventListener('resize', handleWindowChange)
+    }
+  }, [isProjectMenuOpen, updateProjectMenuPosition])
 
   useEffect(() => {
     if (!sidebarTooltip) {
@@ -211,33 +283,57 @@ export function ProjectShell({
     setIsMobileNavOpen((current) => !current)
   }
 
+  function getPageActionClassName(action: PageAction) {
+    if (action.variant === 'secondary') {
+      return 'mt-0 gap-1.5 bg-[#f5f7f8] px-2.5 py-1.5 text-[11px] font-medium tracking-[-0.01em] text-[#1d1d1f] transition-colors hover:bg-[#e8e8ed]'
+    }
+
+    return 'mt-0 gap-1.5 px-2.5 py-1.5 text-[11px] font-medium tracking-[-0.01em] transition-colors hover:bg-[#0962ba]'
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-[#e8e8ed] font-display text-[#1d1d1f] antialiased">
       <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-[#e8e8ed]">
         <header className="relative flex h-14 flex-shrink-0 items-center justify-between border-b border-black/8 bg-[#e8e8ed] px-4 sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
-            <button
-              type="button"
-              className="apple-focus-ring hidden items-center gap-1.5 rounded-[0.7rem] px-2 py-1.5 text-left text-[#1d1d1f] transition-colors hover:bg-black/[0.04] md:inline-flex"
-              aria-label="Selecionar projeto"
-            >
-              <span className="whitespace-nowrap text-[13px] font-medium tracking-[-0.01em]">
-                {companyName}
-              </span>
-              <span
-                aria-hidden="true"
-                className="material-symbols-outlined text-[16px] text-[#86868b]"
+            <h1 className="sr-only">{pageTitle}</h1>
+            <div className="hidden md:block">
+              <button
+                ref={projectMenuTriggerRef}
+                type="button"
+                className="apple-focus-ring inline-flex items-center gap-1.5 rounded-[0.7rem] px-2 py-1.5 text-left text-[#1d1d1f] transition-colors hover:bg-black/[0.04]"
+                aria-label="Selecionar projeto"
+                aria-expanded={isProjectMenuOpen}
+                onClick={() => {
+                  if (projectOptions.length === 0) {
+                    return
+                  }
+
+                  if (!isProjectMenuOpen) {
+                    updateProjectMenuPosition()
+                  }
+
+                  setIsProjectMenuOpen((current) => !current)
+                }}
               >
-                expand_more
-              </span>
-            </button>
+                <span className="whitespace-nowrap text-[13px] font-medium tracking-[-0.01em]">
+                  {companyName}
+                </span>
+                <span
+                  aria-hidden="true"
+                  className="material-symbols-outlined text-[16px] text-[#86868b]"
+                >
+                  expand_more
+                </span>
+              </button>
+            </div>
             <div className="hidden items-center gap-2 text-[13px] tracking-[-0.01em] text-[#86868b] md:flex">
               <span aria-hidden="true" className="text-[#b0b0b4]">
                 /
               </span>
-              <h1 className="text-[13px] font-medium tracking-[-0.01em] text-[#1d1d1f]">
+              <span className="text-[13px] font-medium tracking-[-0.01em] text-[#1d1d1f]">
                 {pageTitle}
-              </h1>
+              </span>
             </div>
             <button
               type="button"
@@ -274,22 +370,43 @@ export function ProjectShell({
           </div>
 
           <div className="flex items-center gap-2">
-            {pageAction ? (
-              <button
-                type="button"
-                onClick={pageAction.onClick}
-                className="apple-focus-ring inline-flex items-center gap-2 rounded-[0.7rem] bg-primary px-4 py-2 text-[12px] font-medium tracking-[-0.01em] text-white transition-all hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:opacity-55 disabled:active:scale-100"
-                disabled={pageAction.disabled}
-              >
-                <span
-                  aria-hidden="true"
-                  className="material-symbols-outlined text-[16px]"
+            {pageActions.map((action) => {
+              const content = (
+                <>
+                  <span
+                    aria-hidden="true"
+                    className="material-symbols-outlined text-[14px]"
+                  >
+                    {action.icon}
+                  </span>
+                  {action.label}
+                </>
+              )
+
+              if (action.variant === 'secondary') {
+                return (
+                  <SecondaryBtn
+                    key={`${action.label}-${action.icon}`}
+                    onClick={action.onClick}
+                    className={getPageActionClassName(action)}
+                    disabled={action.disabled}
+                  >
+                    {content}
+                  </SecondaryBtn>
+                )
+              }
+
+              return (
+                <PrimaryBtn
+                  key={`${action.label}-${action.icon}`}
+                  onClick={action.onClick}
+                  className={getPageActionClassName(action)}
+                  disabled={action.disabled}
                 >
-                  {pageAction.icon}
-                </span>
-                {pageAction.label}
-              </button>
-            ) : null}
+                  {content}
+                </PrimaryBtn>
+              )
+            })}
             <button
               type="button"
               className="apple-focus-ring inline-flex size-8 items-center justify-center text-[#86868b] transition-colors hover:text-[#1d1d1f]"
@@ -348,7 +465,11 @@ export function ProjectShell({
             <nav className="no-scrollbar h-full space-y-1 overflow-x-visible overflow-y-auto pt-1">
               {sidebarItems.map((item) => {
                 const isActive = item.key === activeSidebarKey
-                const href = getSidebarHref(item.key, documentsHref)
+                const href = getSidebarHref(item.key, {
+                  documentsHref,
+                  indicatorsHref,
+                  overviewHref,
+                })
                 const commonProps = {
                   'aria-label': item.label,
                   className: `flex size-9 items-center justify-center rounded-[0.7rem] transition-colors ${
@@ -451,7 +572,11 @@ export function ProjectShell({
             <nav className="space-y-1">
               {sidebarItems.map((item) => {
                 const isActive = item.key === activeSidebarKey
-                const href = getSidebarHref(item.key, documentsHref)
+                const href = getSidebarHref(item.key, {
+                  documentsHref,
+                  indicatorsHref,
+                  overviewHref,
+                })
                 const navContent = (
                   <>
                     <span
@@ -519,6 +644,63 @@ export function ProjectShell({
               }}
             >
               {sidebarTooltip.label}
+            </div>,
+            document.body
+          )
+        : null}
+      {isProjectMenuOpen &&
+      projectMenuPosition &&
+      projectOptions.length > 0 &&
+      typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              ref={projectMenuContentRef}
+              className="fixed z-[9998] w-60 rounded-[0.7rem] bg-white p-2 shadow-[rgba(0,0,0,0.16)_0px_10px_30px]"
+              style={{
+                left: `${projectMenuPosition.left}px`,
+                top: `${projectMenuPosition.top}px`,
+              }}
+            >
+              <div className="space-y-1">
+                <Link
+                  to="/dashboard"
+                  className="apple-focus-ring flex items-center rounded-[0.7rem] px-3 py-2 text-[12px] font-medium tracking-[-0.01em] text-[#1d1d1f] transition-colors hover:bg-black/[0.04]"
+                  onClick={() => {
+                    setIsProjectMenuOpen(false)
+                    setProjectMenuPosition(null)
+                  }}
+                >
+                  <span className="truncate">Todos</span>
+                </Link>
+                {projectOptions.map((project) => {
+                  const isCurrent = project.id === currentProjectId
+                  return (
+                    <Link
+                      key={project.id}
+                      to={project.href}
+                      className={`apple-focus-ring flex items-center justify-between rounded-[0.7rem] px-3 py-2 text-[12px] font-medium tracking-[-0.01em] transition-colors ${
+                        isCurrent
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-[#1d1d1f] hover:bg-black/[0.04]'
+                      }`}
+                      onClick={() => {
+                        setIsProjectMenuOpen(false)
+                        setProjectMenuPosition(null)
+                      }}
+                    >
+                      <span className="truncate">{project.name}</span>
+                      {isCurrent ? (
+                        <span
+                          aria-hidden="true"
+                          className="material-symbols-outlined text-[15px]"
+                        >
+                          check
+                        </span>
+                      ) : null}
+                    </Link>
+                  )
+                })}
+              </div>
             </div>,
             document.body
           )

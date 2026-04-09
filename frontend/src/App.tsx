@@ -3,7 +3,11 @@ import { ProtectedRoute } from './components/protected-route'
 import { useAuth } from './hooks/use-auth'
 import { DashboardPage } from './pages/dashboard-page'
 import { LoginPage } from './pages/login-page'
+import { ProjectWorkspaceLayout } from './components/project-workspace-layout'
+import { ProjectDetailPage } from './pages/project-detail-page'
 import { ProjectDocumentsPage } from './pages/project-documents-page'
+import { ProjectFormPage } from './pages/project-form-page'
+import { ProjectIndicatorsPage } from './pages/project-indicators-page'
 
 function FallbackRoute() {
   const { isAuthenticated, isLoading } = useAuth()
@@ -29,13 +33,33 @@ function App() {
         }
       />
       <Route
-        path="/projects/:projectId"
+        path="/projects/new"
         element={
           <ProtectedRoute>
-            <ProjectDocumentsPage />
+            <ProjectFormPage mode="create" />
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/projects/:projectId/edit"
+        element={
+          <ProtectedRoute>
+            <ProjectFormPage mode="edit" />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/projects/:projectId"
+        element={
+          <ProtectedRoute>
+            <ProjectWorkspaceLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<ProjectDetailPage />} />
+        <Route path="documents" element={<ProjectDocumentsPage />} />
+        <Route path="indicators" element={<ProjectIndicatorsPage />} />
+      </Route>
       <Route path="*" element={<FallbackRoute />} />
     </Routes>
   )

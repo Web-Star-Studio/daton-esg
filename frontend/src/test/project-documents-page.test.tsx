@@ -1,12 +1,14 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { ProjectWorkspaceLayout } from '../components/project-workspace-layout'
 import { ProjectDocumentsPage } from '../pages/project-documents-page'
 import {
   confirmProjectDocumentUpload,
   createProjectDocumentUpload,
   deleteProjectDocument,
   fetchProject,
+  fetchProjects,
   fetchProjectDocuments,
   uploadFileToPresignedUrl,
 } from '../services/api-client'
@@ -30,12 +32,14 @@ vi.mock('../services/api-client', () => ({
   createProjectDocumentUpload: vi.fn(),
   deleteProjectDocument: vi.fn(),
   fetchProject: vi.fn(),
+  fetchProjects: vi.fn(),
   fetchProjectDocuments: vi.fn(),
   uploadFileToPresignedUrl: vi.fn(),
 }))
 
 const mockUseAuth = vi.mocked(useAuth)
 const mockFetchProject = vi.mocked(fetchProject)
+const mockFetchProjects = vi.mocked(fetchProjects)
 const mockFetchProjectDocuments = vi.mocked(fetchProjectDocuments)
 const mockCreateProjectDocumentUpload = vi.mocked(createProjectDocumentUpload)
 const mockConfirmProjectDocumentUpload = vi.mocked(confirmProjectDocumentUpload)
@@ -54,9 +58,11 @@ function getAssertedFileInput(container: HTMLElement) {
 
 function renderPage() {
   return render(
-    <MemoryRouter initialEntries={['/projects/project-1']}>
+    <MemoryRouter initialEntries={['/projects/project-1/documents']}>
       <Routes>
-        <Route path="/projects/:projectId" element={<ProjectDocumentsPage />} />
+        <Route path="/projects/:projectId" element={<ProjectWorkspaceLayout />}>
+          <Route path="documents" element={<ProjectDocumentsPage />} />
+        </Route>
       </Routes>
     </MemoryRouter>
   )
@@ -97,6 +103,22 @@ describe('ProjectDocumentsPage', () => {
       created_at: '2026-04-06T00:00:00Z',
       updated_at: '2026-04-06T00:00:00Z',
     })
+    mockFetchProjects.mockResolvedValue([
+      {
+        id: 'project-1',
+        org_name: 'Acme Inc.',
+        org_sector: 'Energia',
+        org_size: null,
+        org_location: null,
+        base_year: 2025,
+        scope: null,
+        status: 'collecting',
+        material_topics: null,
+        sdg_goals: null,
+        created_at: '2026-04-06T00:00:00Z',
+        updated_at: '2026-04-06T00:00:00Z',
+      },
+    ])
     mockFetchProjectDocuments.mockResolvedValue([])
     mockCreateProjectDocumentUpload.mockReset()
     mockConfirmProjectDocumentUpload.mockReset()
@@ -122,6 +144,11 @@ describe('ProjectDocumentsPage', () => {
     ).toBeInTheDocument()
     expect(mockFetchProject).toHaveBeenCalledWith('project-1')
     expect(mockFetchProjectDocuments).toHaveBeenCalledWith('project-1')
+    expect(
+      screen.getByRole('button', {
+        name: /arraste arquivos aqui ou clique para selecionar/i,
+      })
+    ).not.toBeDisabled()
   })
 
   it('shows a validation error for unsupported file types', async () => {

@@ -1,19 +1,19 @@
-import { useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { DocumentList } from '../components/document-list'
 import { FileUploader, type PendingUpload } from '../components/file-uploader'
-import { ProjectShell } from '../components/project-shell'
 import {
   confirmProjectDocumentUpload,
   createProjectDocumentUpload,
   deleteProjectDocument,
-  fetchProject,
   fetchProjectDocuments,
   uploadFileToPresignedUrl,
 } from '../services/api-client'
-import type { ProjectDocument, ProjectRecord } from '../types/project'
+import {
+  useProjectShellRegistration,
+  useProjectWorkspace,
+} from '../hooks/use-project-workspace'
+import type { ProjectDocument } from '../types/project'
 
-const COMPANY_PLACEHOLDER = 'Projeto atual'
 const MAX_DOCUMENT_SIZE_BYTES = 50 * 1024 * 1024
 const ALLOWED_EXTENSIONS = new Set(['pdf', 'xlsx', 'csv', 'docx'])
 
@@ -32,10 +32,11 @@ function getUploadId(file: File) {
 }
 
 export function ProjectDocumentsPage() {
-  const { projectId } = useParams()
+  const { currentProjectId, isLoadingWorkspace, workspaceError } =
+    useProjectWorkspace()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const uploadFilesRef = useRef<Map<string, File>>(new Map())
-  const [project, setProject] = useState<ProjectRecord | null>(null)
+  const activeProjectIdRef = useRef<string | null>(currentProjectId || null)
   const [documents, setDocuments] = useState<ProjectDocument[]>([])
   const [uploads, setUploads] = useState<PendingUpload[]>([])
   const [validationMessage, setValidationMessage] = useState<string | null>(
@@ -47,31 +48,56 @@ export function ProjectDocumentsPage() {
   const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(
     null
   )
+  const isUploaderDisabled =
+    isLoading || isLoadingWorkspace || isUploading || !currentProjectId
+  const pageAction = useMemo(
+    () => ({
+      disabled: isUploaderDisabled,
+      icon: 'upload_file',
+      label: 'Selecionar arquivos',
+      onClick: () => {
+        fileInputRef.current?.click()
+      },
+    }),
+    [isUploaderDisabled]
+  )
+  const pageActions = useMemo(() => [pageAction], [pageAction])
+
+  useProjectShellRegistration({
+    activeSidebarKey: 'documents',
+    pageActions,
+    pageTitle: 'Documentos',
+  })
 
   useEffect(() => {
-    if (!projectId) {
+    activeProjectIdRef.current = currentProjectId || null
+
+    if (!currentProjectId) {
+      setDocuments([])
+      setUploads([])
+      uploadFilesRef.current = new Map()
+      setValidationMessage(null)
       setPageError('Projeto inválido.')
       setIsLoading(false)
       return
     }
 
     let active = true
-    const currentProjectId = projectId
 
-    async function loadProjectContext() {
+    async function loadDocuments() {
+      setDocuments([])
+      setUploads([])
+      uploadFilesRef.current = new Map()
+      setValidationMessage(null)
       setIsLoading(true)
 
       try {
-        const [projectResponse, documentsResponse] = await Promise.all([
-          fetchProject(currentProjectId),
-          fetchProjectDocuments(currentProjectId),
-        ])
+        const documentsResponse = await fetchProjectDocuments(currentProjectId)
 
         if (!active) {
           return
         }
 
-        setProject(projectResponse)
         setDocuments(documentsResponse)
         setPageError(null)
       } catch (error) {
@@ -84,6 +110,7 @@ export function ProjectDocumentsPage() {
             ? error.message
             : 'Não foi possível carregar os documentos do projeto.'
         )
+        setDocuments([])
       } finally {
         if (active) {
           setIsLoading(false)
@@ -91,16 +118,19 @@ export function ProjectDocumentsPage() {
       }
     }
 
-    void loadProjectContext()
+    void loadDocuments()
 
     return () => {
       active = false
     }
-  }, [projectId])
+  }, [currentProjectId])
 
-  async function refreshDocuments(currentProjectId: string) {
+  async function refreshDocuments(expectedProjectId: string) {
     try {
-      const nextDocuments = await fetchProjectDocuments(currentProjectId)
+      const nextDocuments = await fetchProjectDocuments(expectedProjectId)
+      if (activeProjectIdRef.current !== expectedProjectId) {
+        return
+      }
       setDocuments(nextDocuments)
     } catch (error) {
       console.error('Failed to refresh project documents', error)
@@ -173,7 +203,7 @@ export function ProjectDocumentsPage() {
   }
 
   async function handleFilesSelected(files: File[]) {
-    if (!projectId || files.length === 0) {
+    if (!currentProjectId || files.length === 0) {
       return
     }
 
@@ -226,14 +256,14 @@ export function ProjectDocumentsPage() {
       await Promise.all(
         validFiles.map(async (file) => {
           try {
-            await uploadSingleFile(projectId, file)
+            await uploadSingleFile(currentProjectId, file)
           } catch {
             return
           }
         })
       )
 
-      await refreshDocuments(projectId)
+      await refreshDocuments(currentProjectId)
     } catch (error) {
       setPageError(
         error instanceof Error
@@ -251,7 +281,7 @@ export function ProjectDocumentsPage() {
   }
 
   async function retryUpload(uploadId: string) {
-    if (!projectId) {
+    if (!currentProjectId) {
       return
     }
 
@@ -272,8 +302,8 @@ export function ProjectDocumentsPage() {
     )
 
     try {
-      await uploadSingleFile(projectId, file)
-      await refreshDocuments(projectId)
+      await uploadSingleFile(currentProjectId, file)
+      await refreshDocuments(currentProjectId)
     } catch (error) {
       setPageError(
         error instanceof Error
@@ -286,7 +316,7 @@ export function ProjectDocumentsPage() {
   }
 
   async function handleDelete(documentId: string) {
-    if (!projectId) {
+    if (!currentProjectId) {
       return
     }
 
@@ -294,7 +324,7 @@ export function ProjectDocumentsPage() {
     setPageError(null)
 
     try {
-      await deleteProjectDocument(projectId, documentId)
+      await deleteProjectDocument(currentProjectId, documentId)
       setDocuments((current) =>
         current.filter((document) => document.id !== documentId)
       )
@@ -310,56 +340,42 @@ export function ProjectDocumentsPage() {
   }
 
   return (
-    <ProjectShell
-      activeSidebarKey="documents"
-      companyName={project?.org_name ?? COMPANY_PLACEHOLDER}
-      documentsHref={projectId ? `/projects/${projectId}` : undefined}
-      pageAction={{
-        label: 'Selecionar arquivos',
-        icon: 'upload_file',
-        onClick: () => {
-          fileInputRef.current?.click()
-        },
-      }}
-      pageTitle="Documentos"
-    >
-      <div className="space-y-6 px-6 pt-4 pb-6 sm:px-10">
-        <FileUploader
-          disabled={isLoading || isUploading || !projectId}
-          inputRef={fileInputRef}
-          onFilesSelected={(files) => {
-            void handleFilesSelected(files)
+    <div className="space-y-6 px-6 pt-4 pb-6 sm:px-10">
+      <FileUploader
+        disabled={isUploaderDisabled}
+        inputRef={fileInputRef}
+        onFilesSelected={(files) => {
+          void handleFilesSelected(files)
+        }}
+        onRemoveUpload={removeUpload}
+        onRetryUpload={(uploadId) => {
+          void retryUpload(uploadId)
+        }}
+        uploads={uploads}
+        validationMessage={validationMessage}
+      />
+
+      {pageError || workspaceError ? (
+        <div className="rounded-lg border border-[#ffd0d0] bg-[#fff6f6] px-4 py-3 text-[12px] font-medium tracking-[-0.01em] text-[#d01f1f]">
+          {pageError ?? workspaceError}
+        </div>
+      ) : null}
+
+      {isLoadingWorkspace || isLoading ? (
+        <div className="rounded-lg border border-black/6 bg-white px-5 py-6">
+          <p className="text-[13px] font-medium tracking-[-0.01em] text-[#1d1d1f]">
+            Carregando documentos do projeto...
+          </p>
+        </div>
+      ) : (
+        <DocumentList
+          deletingDocumentId={deletingDocumentId}
+          documents={documents}
+          onDelete={(documentId) => {
+            void handleDelete(documentId)
           }}
-          onRemoveUpload={removeUpload}
-          onRetryUpload={(uploadId) => {
-            void retryUpload(uploadId)
-          }}
-          uploads={uploads}
-          validationMessage={validationMessage}
         />
-
-        {pageError ? (
-          <div className="rounded-lg border border-[#ffd0d0] bg-[#fff6f6] px-4 py-3 text-[12px] font-medium tracking-[-0.01em] text-[#d01f1f]">
-            {pageError}
-          </div>
-        ) : null}
-
-        {isLoading ? (
-          <div className="rounded-lg border border-black/6 bg-white px-5 py-6">
-            <p className="text-[13px] font-medium tracking-[-0.01em] text-[#1d1d1f]">
-              Carregando documentos do projeto...
-            </p>
-          </div>
-        ) : (
-          <DocumentList
-            deletingDocumentId={deletingDocumentId}
-            documents={documents}
-            onDelete={(documentId) => {
-              void handleDelete(documentId)
-            }}
-          />
-        )}
-      </div>
-    </ProjectShell>
+      )}
+    </div>
   )
 }
