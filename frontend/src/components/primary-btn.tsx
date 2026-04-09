@@ -5,7 +5,7 @@ type PrimaryBtnProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 }
 
 const PRIMARY_BTN_BASE_CLASSNAME =
-  'apple-focus-ring mt-4 inline-flex items-center justify-center rounded-[0.7rem] bg-primary px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-[#0962ba]'
+  'apple-focus-ring inline-flex items-center justify-center rounded-[0.7rem] bg-primary px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-[#0962ba]'
 
 export function PrimaryBtn({
   children,

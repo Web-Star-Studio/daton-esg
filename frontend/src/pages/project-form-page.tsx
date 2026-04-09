@@ -117,7 +117,7 @@ export function ProjectFormPage({ mode }: ProjectFormPageProps) {
                 Carregando projeto...
               </p>
             </div>
-          ) : (
+          ) : mode === 'create' || project ? (
             <ProjectForm
               key={`${mode}-${project?.id ?? 'new'}`}
               errorMessage={pageError}
@@ -148,6 +148,12 @@ export function ProjectFormPage({ mode }: ProjectFormPageProps) {
                 mode === 'create' ? 'Criar projeto' : 'Salvar alterações'
               }
             />
+          ) : (
+            <div className="rounded-lg border border-black/6 bg-[#f5f7f8] px-5 py-6">
+              <p className="text-[13px] font-medium tracking-[-0.01em] text-[#1d1d1f]">
+                {pageError ?? 'Projeto não encontrado para edição.'}
+              </p>
+            </div>
           )}
         </section>
       </main>

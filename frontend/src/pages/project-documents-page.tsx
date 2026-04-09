@@ -47,15 +47,18 @@ export function ProjectDocumentsPage() {
   const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(
     null
   )
+  const isUploaderDisabled =
+    isLoading || isLoadingWorkspace || isUploading || !currentProjectId
   const pageAction = useMemo(
     () => ({
+      disabled: isUploaderDisabled,
       icon: 'upload_file',
       label: 'Selecionar arquivos',
       onClick: () => {
         fileInputRef.current?.click()
       },
     }),
-    []
+    [isUploaderDisabled]
   )
   const pageActions = useMemo(() => [pageAction], [pageAction])
 
@@ -67,6 +70,7 @@ export function ProjectDocumentsPage() {
 
   useEffect(() => {
     if (!currentProjectId) {
+      setDocuments([])
       setPageError('Projeto inválido.')
       setIsLoading(false)
       return
@@ -75,6 +79,7 @@ export function ProjectDocumentsPage() {
     let active = true
 
     async function loadDocuments() {
+      setDocuments([])
       setIsLoading(true)
 
       try {
@@ -96,6 +101,7 @@ export function ProjectDocumentsPage() {
             ? error.message
             : 'Não foi possível carregar os documentos do projeto.'
         )
+        setDocuments([])
       } finally {
         if (active) {
           setIsLoading(false)
@@ -324,9 +330,7 @@ export function ProjectDocumentsPage() {
   return (
     <div className="space-y-6 px-6 pt-4 pb-6 sm:px-10">
       <FileUploader
-        disabled={
-          isLoading || isLoadingWorkspace || isUploading || !currentProjectId
-        }
+        disabled={isUploaderDisabled}
         inputRef={fileInputRef}
         onFilesSelected={(files) => {
           void handleFilesSelected(files)

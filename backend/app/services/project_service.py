@@ -20,6 +20,8 @@ async def list_projects_for_user(
 
     if status_filter is not None:
         query = query.where(Project.status == status_filter)
+    else:
+        query = query.where(Project.status != ProjectStatus.ARCHIVED)
 
     if search:
         query = query.where(Project.org_name.ilike(f"%{search.strip()}%"))

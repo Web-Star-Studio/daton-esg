@@ -24,6 +24,8 @@ export type ProjectWorkspaceContextValue = {
 export const ProjectWorkspaceContext =
   createContext<ProjectWorkspaceContextValue | null>(null)
 
+const DEFAULT_PAGE_ACTIONS: PageAction[] = []
+
 export function useProjectWorkspace() {
   const context = useContext(ProjectWorkspaceContext)
 
@@ -44,7 +46,7 @@ type ProjectShellRegistrationOptions = {
 
 export function useProjectShellRegistration({
   activeSidebarKey,
-  pageActions = [],
+  pageActions = DEFAULT_PAGE_ACTIONS,
   pageTitle,
 }: ProjectShellRegistrationOptions) {
   const { setActiveSidebarKey, setPageActions, setPageTitle } =

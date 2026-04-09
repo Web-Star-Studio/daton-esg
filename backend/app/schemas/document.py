@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.enums import DocumentFileType, DocumentParsingStatus
 
@@ -36,3 +36,12 @@ class DocumentResponse(BaseModel):
 
 class DocumentUpdateRequest(BaseModel):
     esg_category: str | None = Field(default=None, max_length=255)
+
+    @field_validator("esg_category", mode="before")
+    @classmethod
+    def normalize_esg_category(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        normalized = value.strip()
+        return normalized or None

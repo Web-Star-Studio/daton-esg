@@ -49,7 +49,6 @@ type ProjectShellProps = {
   pageActions?: PageAction[]
   pageTitle: string
   projectOptions?: ProjectShellOption[]
-  onSelectProject?: (projectId: string) => void
 }
 
 const sidebarItems: Array<{
@@ -126,7 +125,6 @@ export function ProjectShell({
   overviewHref,
   documentsHref,
   indicatorsHref,
-  onSelectProject,
   pageActions = [],
   pageTitle,
   projectOptions = [],
@@ -688,7 +686,6 @@ export function ProjectShell({
                       onClick={() => {
                         setIsProjectMenuOpen(false)
                         setProjectMenuPosition(null)
-                        onSelectProject?.(project.id)
                       }}
                     >
                       <span className="truncate">{project.name}</span>

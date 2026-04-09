@@ -144,6 +144,11 @@ describe('ProjectDocumentsPage', () => {
     ).toBeInTheDocument()
     expect(mockFetchProject).toHaveBeenCalledWith('project-1')
     expect(mockFetchProjectDocuments).toHaveBeenCalledWith('project-1')
+    expect(
+      screen.getByRole('button', {
+        name: /arraste arquivos aqui ou clique para selecionar/i,
+      })
+    ).not.toBeDisabled()
   })
 
   it('shows a validation error for unsupported file types', async () => {

@@ -1,10 +1,12 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.enums import OrganizationSize, ProjectStatus
+
+CURRENT_YEAR = date.today().year
 
 
 def _normalize_optional_text(value: str | None) -> str | None:
@@ -20,7 +22,7 @@ class ProjectCreate(BaseModel):
     org_sector: str | None = None
     org_size: OrganizationSize | None = None
     org_location: str | None = None
-    base_year: int
+    base_year: int = Field(ge=1900, le=CURRENT_YEAR)
     scope: str | None = None
 
     @field_validator("org_name")
@@ -42,7 +44,7 @@ class ProjectUpdate(BaseModel):
     org_sector: str | None = None
     org_size: OrganizationSize | None = None
     org_location: str | None = None
-    base_year: int | None = None
+    base_year: int | None = Field(default=None, ge=1900, le=CURRENT_YEAR)
     scope: str | None = None
     status: ProjectStatus | None = None
     material_topics: dict[str, Any] | list[Any] | None = None

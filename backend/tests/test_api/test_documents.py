@@ -241,3 +241,24 @@ def test_patch_document_updates_esg_category(monkeypatch, documents_app) -> None
 
     assert response.status_code == 200
     assert response.json()["esg_category"] == "ambiental"
+
+    async def fake_update_document_esg_category_whitespace(_session, **kwargs):
+        assert _session is session
+        assert kwargs["document"] is document
+        assert kwargs["esg_category"] is None
+        document.esg_category = None
+        return document
+
+    monkeypatch.setattr(
+        "app.api.documents.update_document_esg_category",
+        fake_update_document_esg_category_whitespace,
+    )
+
+    with TestClient(app) as client:
+        response = client.patch(
+            f"/api/v1/projects/{project.id}/documents/{document.id}",
+            json={"esg_category": "   "},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["esg_category"] is None

@@ -169,7 +169,6 @@ export function ProjectWorkspaceLayout() {
           projectId ? `/projects/${projectId}/indicators` : undefined
         }
         overviewHref={projectId ? `/projects/${projectId}` : undefined}
-        onSelectProject={navigateToProject}
         pageActions={pageActions}
         pageTitle={pageTitle}
         projectOptions={projectOptions}

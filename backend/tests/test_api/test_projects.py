@@ -71,7 +71,11 @@ def test_create_project_creates_project_for_current_user(
         assert _session is session
         assert user_id == user.id
         assert payload.org_name == "Acme Inc."
+        assert payload.org_sector == "Energia"
+        assert payload.org_size == OrganizationSize.MEDIUM
+        assert payload.org_location == "Recife"
         assert payload.base_year == 2025
+        assert payload.scope == "Escopo base"
         return project
 
     monkeypatch.setattr(
@@ -147,6 +151,28 @@ def test_list_projects_passes_search_and_status_filters(
 
     assert response.status_code == 200
     assert response.json() == []
+
+
+@pytest.mark.parametrize("base_year", [1899, datetime.now(timezone.utc).year + 1])
+def test_create_project_rejects_invalid_base_year(
+    base_year: int, projects_app
+) -> None:
+    app, _session, _user = projects_app
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/projects",
+            json={
+                "org_name": "Acme Inc.",
+                "org_sector": "Energia",
+                "org_size": "média",
+                "org_location": "Recife",
+                "base_year": base_year,
+                "scope": "Escopo base",
+            },
+        )
+
+    assert response.status_code == 422
 
 
 def test_get_project_returns_project_details(monkeypatch, projects_app) -> None:

@@ -31,7 +31,6 @@ export function ProjectDetailPage() {
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(true)
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
   const [pageError, setPageError] = useState<string | null>(null)
-  const canGenerateReport = documents.length > 0
   const pageActions = useMemo<PageAction[]>(
     () =>
       project
@@ -52,14 +51,14 @@ export function ProjectDetailPage() {
               },
             },
             {
-              disabled: !canGenerateReport,
+              disabled: true,
               icon: 'auto_awesome',
               label: 'Gerar Relatório',
               onClick: () => undefined,
             },
           ]
         : [],
-    [canGenerateReport, navigate, project]
+    [navigate, project]
   )
 
   useProjectShellRegistration({
@@ -70,6 +69,7 @@ export function ProjectDetailPage() {
 
   useEffect(() => {
     if (!currentProjectId) {
+      setDocuments([])
       setPageError('Projeto inválido.')
       setIsLoadingDocuments(false)
       return
@@ -78,6 +78,8 @@ export function ProjectDetailPage() {
     let active = true
 
     async function loadDocuments() {
+      setDocuments([])
+      setPageError(null)
       setIsLoadingDocuments(true)
 
       try {
@@ -99,6 +101,7 @@ export function ProjectDetailPage() {
             ? error.message
             : 'Não foi possível carregar o projeto.'
         )
+        setDocuments([])
       } finally {
         if (active) {
           setIsLoadingDocuments(false)

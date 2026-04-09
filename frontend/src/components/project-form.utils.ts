@@ -29,7 +29,7 @@ export function projectRecordToFormValues(
     | undefined
 ): ProjectFormValues {
   return {
-    base_year: project?.base_year ? String(project.base_year) : '',
+    base_year: project?.base_year != null ? String(project.base_year) : '',
     org_location: project?.org_location ?? '',
     org_name: project?.org_name ?? '',
     org_sector: project?.org_sector ?? '',
