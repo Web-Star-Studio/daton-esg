@@ -1,9 +1,11 @@
 import type { AuthenticatedUser } from '../types/auth'
 import type {
   CreateProjectDocumentUploadInput,
+  ProjectCreateInput,
   ProjectDocument,
   ProjectDocumentUploadSession,
   ProjectRecord,
+  ProjectUpdateInput,
 } from '../types/project'
 
 let authToken: string | null = null
@@ -73,6 +75,88 @@ export async function fetchProject(projectId: string) {
   }
 
   return (await response.json()) as ProjectRecord
+}
+
+export async function fetchProjects(filters?: {
+  search?: string
+  status?: string
+}) {
+  const query = new URLSearchParams()
+
+  if (filters?.search) {
+    query.set('search', filters.search)
+  }
+
+  if (filters?.status) {
+    query.set('status', filters.status)
+  }
+
+  const response = await apiFetch(
+    `/api/v1/projects${query.size > 0 ? `?${query.toString()}` : ''}`
+  )
+
+  if (!response.ok) {
+    throw await parseApiError(
+      response,
+      `Falha ao carregar os projetos (${response.status}).`
+    )
+  }
+
+  return (await response.json()) as ProjectRecord[]
+}
+
+export async function createProject(payload: ProjectCreateInput) {
+  const response = await apiFetch('/api/v1/projects', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    throw await parseApiError(
+      response,
+      `Falha ao criar o projeto (${response.status}).`
+    )
+  }
+
+  return (await response.json()) as ProjectRecord
+}
+
+export async function updateProject(
+  projectId: string,
+  payload: ProjectUpdateInput
+) {
+  const response = await apiFetch(`/api/v1/projects/${projectId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    throw await parseApiError(
+      response,
+      `Falha ao atualizar o projeto (${response.status}).`
+    )
+  }
+
+  return (await response.json()) as ProjectRecord
+}
+
+export async function archiveProject(projectId: string) {
+  const response = await apiFetch(`/api/v1/projects/${projectId}`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    throw await parseApiError(
+      response,
+      `Falha ao arquivar o projeto (${response.status}).`
+    )
+  }
 }
 
 export async function fetchProjectDocuments(projectId: string) {

@@ -3,7 +3,7 @@ import type { ProjectDocument } from '../types/project'
 type DocumentListProps = {
   deletingDocumentId: string | null
   documents: ProjectDocument[]
-  onDelete: (documentId: string) => void
+  onDelete?: (documentId: string) => void
 }
 
 function formatFileSize(fileSizeBytes: number | null) {
@@ -71,22 +71,24 @@ export function DocumentList({
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                onDelete(document.id)
-              }}
-              disabled={deletingDocumentId === document.id}
-              className="apple-focus-ring inline-flex items-center gap-2 rounded-[0.7rem] px-3 py-2 text-[12px] font-medium tracking-[-0.01em] text-[#1d1d1f] transition-colors hover:bg-black/[0.04] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <span
-                aria-hidden="true"
-                className="material-symbols-outlined text-[16px] text-[#86868b]"
+            {onDelete ? (
+              <button
+                type="button"
+                onClick={() => {
+                  onDelete(document.id)
+                }}
+                disabled={deletingDocumentId === document.id}
+                className="apple-focus-ring inline-flex items-center gap-2 rounded-[0.7rem] px-3 py-2 text-[12px] font-medium tracking-[-0.01em] text-[#1d1d1f] transition-colors hover:bg-black/[0.04] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                delete
-              </span>
-              Remover
-            </button>
+                <span
+                  aria-hidden="true"
+                  className="material-symbols-outlined text-[16px] text-[#86868b]"
+                >
+                  delete
+                </span>
+                Remover
+              </button>
+            ) : null}
           </li>
         ))}
       </ul>

@@ -6,13 +6,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db_session
 from app.core.security import get_current_user
 from app.models import User
-from app.schemas import DocumentResponse, DocumentUploadRequest, DocumentUploadResponse
+from app.schemas import (
+    DocumentResponse,
+    DocumentUpdateRequest,
+    DocumentUploadRequest,
+    DocumentUploadResponse,
+)
 from app.services.document_service import (
     confirm_document_upload,
     create_document_upload,
     delete_document,
     get_document_for_project,
     list_documents_for_project,
+    update_document_esg_category,
 )
 from app.services.project_service import get_project_for_user
 from app.services.storage_service import get_storage_service
@@ -107,3 +113,21 @@ async def delete_project_document(
         storage=get_storage_service(),
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.patch("/{document_id}", response_model=DocumentResponse)
+async def update_project_document(
+    project_id: UUID,
+    document_id: UUID,
+    payload: DocumentUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> DocumentResponse:
+    project = await get_project_for_user(session, project_id, current_user.id)
+    document = await get_document_for_project(session, project.id, document_id)
+    updated_document = await update_document_esg_category(
+        session,
+        document=document,
+        esg_category=payload.esg_category,
+    )
+    return DocumentResponse.model_validate(updated_document)

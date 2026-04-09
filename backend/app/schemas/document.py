@@ -32,3 +32,7 @@ class DocumentResponse(BaseModel):
     extracted_text: str | None
     esg_category: str | None
     created_at: datetime
+
+
+class DocumentUpdateRequest(BaseModel):
+    esg_category: str | None = Field(default=None, max_length=255)

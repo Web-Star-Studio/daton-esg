@@ -127,6 +127,17 @@ SF Pro-like stack must be reflected first in Tailwind and then in this file.
 - Radius: `DEFAULT` (`0.7rem`) or `lg` (`16px`) depending on button emphasis
 - Hover: darker blue shift
 - Focus: `ring-4` with `primary/20` or `primary/30`
+- In authenticated app shells, all page-level action buttons must live in the
+  shell header, positioned immediately to the left of the notifications button
+- These actions are dynamic and must change according to the current page
+- Action clusters may contain both primary and secondary buttons, but the most
+  important step for the current page should remain visually dominant
+- Page content areas and internal table toolbars must not duplicate these page
+  actions when they already exist in the shell header
+- Primary actions should use the shared `PrimaryBtn` component
+- Disabled primary actions should keep the `PrimaryBtn` component and switch to
+  the muted dark gray disabled state instead of introducing a separate button
+  style
 
 #### Pill links
 
@@ -134,6 +145,15 @@ SF Pro-like stack must be reflected first in Tailwind and then in this file.
 - Border radius: `full`
 - Border: `1px solid currentColor`
 - Use for lightweight secondary actions
+
+#### Secondary action button
+
+- Background: `#f5f7f8`
+- Text: `#1d1d1f`
+- Radius: `DEFAULT` (`0.7rem`)
+- Hover: slightly darker neutral fill (`#e8e8ed`)
+- Use the shared `SecondaryBtn` component for secondary action buttons such as
+  `Editar` or `Cancelar`
 
 ### Inputs
 
@@ -162,6 +182,17 @@ SF Pro-like stack must be reflected first in Tailwind and then in this file.
 - Blur + saturation treatment
 - White or softened white nav copy
 - Compact vertical height
+
+### App shell header
+
+- Authenticated workspace pages use a shell header above the main content canvas
+- The search bar belongs to this shell header
+- Notifications and profile controls belong to this shell header
+- Page-specific action buttons belong to this shell header and must appear
+  immediately before notifications
+- The shell header is the source of truth for page actions; content canvases may
+  contain filters and supporting controls, but must not duplicate page action
+  buttons already exposed in the shell
 
 ## 6. Layout Principles
 

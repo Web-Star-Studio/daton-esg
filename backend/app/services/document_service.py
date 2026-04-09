@@ -195,3 +195,16 @@ async def delete_document(
             extra={"s3_key": document.s3_key},
         )
         # TODO: enqueue retry/cleanup once background jobs exist.
+
+
+async def update_document_esg_category(
+    session: AsyncSession,
+    *,
+    document: Document,
+    esg_category: str | None,
+) -> Document:
+    normalized_category = esg_category.strip() if esg_category else None
+    document.esg_category = normalized_category or None
+    await session.commit()
+    await session.refresh(document)
+    return document

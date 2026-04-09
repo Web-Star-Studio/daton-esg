@@ -37,10 +37,36 @@ describe('App', () => {
   beforeEach(() => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => ({
-        ok: true,
-        json: async () => ({ status: 'ok' }),
-      }))
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+
+        if (url.includes('/api/v1/projects')) {
+          return {
+            ok: true,
+            json: async () => [
+              {
+                id: 'project-1',
+                org_name: 'Acme Inc.',
+                org_sector: 'Energia',
+                org_size: null,
+                org_location: null,
+                base_year: 2025,
+                scope: null,
+                status: 'collecting',
+                material_topics: null,
+                sdg_goals: null,
+                created_at: '2026-04-06T00:00:00Z',
+                updated_at: '2026-04-06T00:00:00Z',
+              },
+            ],
+          }
+        }
+
+        return {
+          ok: true,
+          json: async () => ({ status: 'ok' }),
+        }
+      })
     )
   })
 
@@ -114,7 +140,7 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole('heading', { name: /indicadores/i })
+        screen.getByRole('heading', { name: /projetos/i })
       ).toBeInTheDocument()
     })
   })
@@ -245,7 +271,7 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole('heading', { name: /indicadores/i })
+        screen.getByRole('heading', { name: /projetos/i })
       ).toBeInTheDocument()
     })
   })
@@ -286,7 +312,7 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole('heading', { name: /indicadores/i })
+        screen.getByRole('heading', { name: /projetos/i })
       ).toBeInTheDocument()
     })
   })

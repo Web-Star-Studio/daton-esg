@@ -194,3 +194,50 @@ def test_delete_document_returns_no_content(monkeypatch, documents_app) -> None:
         )
 
     assert response.status_code == 204
+
+
+def test_patch_document_updates_esg_category(monkeypatch, documents_app) -> None:
+    app, session, user = documents_app
+    project = make_project(user)
+    document = make_document(project)
+
+    async def fake_get_project_for_user(_session, _project_id, _user_id):
+        assert _session is session
+        assert _project_id == project.id
+        assert _user_id == user.id
+        return project
+
+    async def fake_get_document_for_project(_session, _project_id, _document_id):
+        assert _session is session
+        assert _project_id == project.id
+        assert _document_id == document.id
+        return document
+
+    async def fake_update_document_esg_category(_session, **kwargs):
+        assert _session is session
+        assert kwargs["document"] is document
+        assert kwargs["esg_category"] == "ambiental"
+        document.esg_category = "ambiental"
+        return document
+
+    monkeypatch.setattr(
+        "app.api.documents.get_project_for_user",
+        fake_get_project_for_user,
+    )
+    monkeypatch.setattr(
+        "app.api.documents.get_document_for_project",
+        fake_get_document_for_project,
+    )
+    monkeypatch.setattr(
+        "app.api.documents.update_document_esg_category",
+        fake_update_document_esg_category,
+    )
+
+    with TestClient(app) as client:
+        response = client.patch(
+            f"/api/v1/projects/{project.id}/documents/{document.id}",
+            json={"esg_category": "ambiental"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["esg_category"] == "ambiental"
