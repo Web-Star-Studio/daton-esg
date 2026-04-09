@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
+from botocore.exceptions import ClientError
 from fastapi import HTTPException
 
 from app.models import Document, Project
@@ -18,6 +19,8 @@ from app.services.document_service import (
     confirm_document_upload,
     create_document_upload,
     delete_document,
+    normalize_filename,
+    validate_file_size,
 )
 from app.services.storage_service import StorageObjectMetadata
 
@@ -63,6 +66,19 @@ class FakeStorage:
 
     async def delete_object(self, *, key: str) -> None:
         self.deleted_keys.append(key)
+
+
+class MissingObjectStorage(FakeStorage):
+    async def get_object_metadata(self, *, key: str) -> StorageObjectMetadata:
+        raise ClientError(
+            {
+                "Error": {
+                    "Code": "NoSuchKey",
+                    "Message": f"Object {key} not found",
+                }
+            },
+            "HeadObject",
+        )
 
 
 def make_project() -> Project:
@@ -181,6 +197,42 @@ async def test_confirm_document_upload_updates_file_size_from_storage() -> None:
     assert confirmed_document.file_size_bytes == 2048
     assert session.commit_count == 1
     assert session.refresh_count == 1
+
+
+@pytest.mark.asyncio
+async def test_confirm_document_upload_raises_when_storage_object_is_missing() -> None:
+    session = FakeSession()
+    storage = MissingObjectStorage()
+    project = make_project()
+    document = make_document(project)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await confirm_document_upload(
+            session,
+            document=document,
+            storage=storage,
+        )
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail == "Upload not found in storage"
+
+
+@pytest.mark.parametrize("file_size_bytes", [0, -1])
+def test_validate_file_size_rejects_non_positive_values(file_size_bytes: int) -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        validate_file_size(file_size_bytes)
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "File size must be greater than zero"
+
+
+@pytest.mark.parametrize("filename", ["", "   "])
+def test_normalize_filename_rejects_empty_values(filename: str) -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        normalize_filename(filename)
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "Filename is required"
 
 
 @pytest.mark.asyncio

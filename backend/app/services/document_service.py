@@ -1,4 +1,5 @@
-from collections.abc import Callable
+import logging
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -13,6 +14,9 @@ from app.models.enums import DocumentFileType, DocumentParsingStatus
 from app.services.storage_service import StorageObjectMetadata, StorageService
 
 MAX_DOCUMENT_SIZE_BYTES = 50 * 1024 * 1024
+MAX_DOCUMENT_LIST_LIMIT = 100
+
+logger = logging.getLogger(__name__)
 
 _DOCUMENT_TYPE_MAP: dict[str, tuple[DocumentFileType, str]] = {
     ".pdf": (DocumentFileType.PDF, "application/pdf"),
@@ -69,11 +73,19 @@ def build_document_s3_key(
 async def list_documents_for_project(
     session: AsyncSession,
     project_id: UUID,
+    *,
+    limit: int = MAX_DOCUMENT_LIST_LIMIT,
+    offset: int = 0,
 ) -> list[Document]:
+    normalized_limit = max(1, min(limit, MAX_DOCUMENT_LIST_LIMIT))
+    normalized_offset = max(0, offset)
+
     result = await session.execute(
         select(Document)
         .where(Document.project_id == project_id)
         .order_by(Document.created_at.desc())
+        .limit(normalized_limit)
+        .offset(normalized_offset)
     )
     return list(result.scalars().all())
 
@@ -125,14 +137,15 @@ async def create_document_upload(
         parsing_status=DocumentParsingStatus.PENDING,
         created_at=datetime.now(timezone.utc),
     )
-    session.add(document)
-    await session.commit()
-    await session.refresh(document)
-
     upload_url = await storage.generate_presigned_upload_url(
         key=s3_key,
         content_type=content_type,
     )
+
+    session.add(document)
+    await session.commit()
+    await session.refresh(document)
+
     return document, upload_url, content_type
 
 
@@ -141,7 +154,7 @@ async def confirm_document_upload(
     *,
     document: Document,
     storage: StorageService,
-    metadata_getter: Callable[[StorageService, str], StorageObjectMetadata]
+    metadata_getter: Callable[[StorageService, str], Awaitable[StorageObjectMetadata]]
     | None = None,
 ) -> Document:
     if metadata_getter is None:
@@ -156,7 +169,7 @@ async def confirm_document_upload(
                 ) from exc
             raise
     else:
-        metadata = metadata_getter(storage, document.s3_key)
+        metadata = await metadata_getter(storage, document.s3_key)
 
     if metadata.content_length is not None:
         document.file_size_bytes = metadata.content_length
@@ -177,5 +190,8 @@ async def delete_document(
     try:
         await storage.delete_object(key=document.s3_key)
     except Exception:
+        logger.exception(
+            "Failed to delete document from storage after database removal",
+            extra={"s3_key": document.s3_key},
+        )
         # TODO: enqueue retry/cleanup once background jobs exist.
-        pass

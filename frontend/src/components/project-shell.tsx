@@ -109,6 +109,7 @@ export function ProjectShell({
   pageTitle,
 }: ProjectShellProps) {
   const { logout, user } = useAuth()
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [sidebarTooltip, setSidebarTooltip] = useState<{
     label: string
@@ -206,6 +207,10 @@ export function ProjectShell({
     })
   }
 
+  function handleToggleMobileNav() {
+    setIsMobileNavOpen((current) => !current)
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-[#e8e8ed] font-display text-[#1d1d1f] antialiased">
       <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-[#e8e8ed]">
@@ -236,8 +241,10 @@ export function ProjectShell({
             </div>
             <button
               type="button"
+              onClick={handleToggleMobileNav}
               className="apple-focus-ring inline-flex size-9 items-center justify-center rounded-[0.7rem] bg-white text-[#1d1d1f] shadow-sm transition-colors hover:bg-black/[0.03] md:hidden"
               aria-label="Abrir navegação"
+              aria-expanded={isMobileNavOpen}
             >
               <span aria-hidden="true" className="material-symbols-outlined">
                 menu
@@ -365,7 +372,6 @@ export function ProjectShell({
                   onMouseLeave: () => {
                     setSidebarTooltip(null)
                   },
-                  title: item.label,
                 }
 
                 const icon = (
@@ -411,6 +417,98 @@ export function ProjectShell({
           </main>
         </div>
       </div>
+      {isMobileNavOpen ? (
+        <div className="fixed inset-0 z-40 flex md:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/20"
+            aria-label="Fechar navegação"
+            onClick={() => {
+              setIsMobileNavOpen(false)
+            }}
+          />
+          <div className="relative z-10 flex h-full w-[248px] flex-col bg-white px-3 py-4 shadow-xl">
+            <div className="mb-4 flex items-center justify-between px-2">
+              <p className="truncate text-[13px] font-medium tracking-[-0.01em] text-[#1d1d1f]">
+                {companyName}
+              </p>
+              <button
+                type="button"
+                className="apple-focus-ring inline-flex size-8 items-center justify-center rounded-[0.7rem] text-[#86868b] hover:bg-black/[0.04] hover:text-[#1d1d1f]"
+                aria-label="Fechar navegação"
+                onClick={() => {
+                  setIsMobileNavOpen(false)
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  className="material-symbols-outlined text-[18px]"
+                >
+                  close
+                </span>
+              </button>
+            </div>
+            <nav className="space-y-1">
+              {sidebarItems.map((item) => {
+                const isActive = item.key === activeSidebarKey
+                const href = getSidebarHref(item.key, documentsHref)
+                const navContent = (
+                  <>
+                    <span
+                      aria-hidden="true"
+                      className={`material-symbols-outlined text-[18px] ${
+                        isActive ? 'text-primary' : 'text-[#86868b]'
+                      }`}
+                      style={
+                        isActive
+                          ? { fontVariationSettings: "'FILL' 1" }
+                          : undefined
+                      }
+                    >
+                      {item.icon}
+                    </span>
+                    <span>{item.label}</span>
+                  </>
+                )
+
+                const className = `apple-focus-ring flex w-full items-center gap-3 rounded-[0.7rem] px-3 py-2 text-left text-[13px] font-medium tracking-[-0.01em] transition-colors ${
+                  isActive
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-[#1d1d1f] hover:bg-black/[0.04]'
+                }`
+
+                if (href) {
+                  return (
+                    <Link
+                      key={item.key}
+                      to={href}
+                      className={className}
+                      onClick={() => {
+                        setIsMobileNavOpen(false)
+                      }}
+                    >
+                      {navContent}
+                    </Link>
+                  )
+                }
+
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    className={className}
+                    onClick={() => {
+                      setIsMobileNavOpen(false)
+                    }}
+                  >
+                    {navContent}
+                  </button>
+                )
+              })}
+            </nav>
+          </div>
+        </div>
+      ) : null}
       {sidebarTooltip && typeof document !== 'undefined'
         ? createPortal(
             <div

@@ -215,4 +215,41 @@ describe('ProjectDocumentsPage', () => {
     )
     expect(mockFetchProjectDocuments).toHaveBeenCalledTimes(2)
   })
+
+  it('deletes a document from the list', async () => {
+    mockFetchProjectDocuments.mockResolvedValue([
+      {
+        id: 'doc-1',
+        project_id: 'project-1',
+        filename: 'inventario.pdf',
+        file_type: 'pdf',
+        s3_key: 'uploads/project-1/doc-1/inventario.pdf',
+        file_size_bytes: 2048,
+        parsing_status: 'pending',
+        extracted_text: null,
+        esg_category: null,
+        created_at: '2026-04-06T00:00:00Z',
+      },
+    ])
+    mockDeleteProjectDocument.mockResolvedValue(undefined)
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('inventario.pdf')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /remover/i }))
+
+    await waitFor(() => {
+      expect(mockDeleteProjectDocument).toHaveBeenCalledWith(
+        'project-1',
+        'doc-1'
+      )
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByText('inventario.pdf')).not.toBeInTheDocument()
+    })
+  })
 })

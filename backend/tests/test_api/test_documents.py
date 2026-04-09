@@ -130,8 +130,17 @@ def test_list_documents_returns_project_documents(monkeypatch, documents_app) ->
         assert _user_id == user.id
         return project
 
-    async def fake_list_documents_for_project(_session, _project_id):
+    async def fake_list_documents_for_project(
+        _session,
+        _project_id,
+        *,
+        limit,
+        offset,
+    ):
+        assert _session is session
         assert _project_id == project.id
+        assert limit == 100
+        assert offset == 0
         return [document]
 
     monkeypatch.setattr(

@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_session
@@ -65,11 +65,18 @@ async def confirm_project_document_upload(
 @router.get("", response_model=list[DocumentResponse])
 async def list_project_documents(
     project_id: UUID,
+    limit: int = Query(default=100, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> list[DocumentResponse]:
     project = await get_project_for_user(session, project_id, current_user.id)
-    documents = await list_documents_for_project(session, project.id)
+    documents = await list_documents_for_project(
+        session,
+        project.id,
+        limit=limit,
+        offset=offset,
+    )
     return [DocumentResponse.model_validate(document) for document in documents]
 
 

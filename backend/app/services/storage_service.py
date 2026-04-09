@@ -1,6 +1,6 @@
 import asyncio
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache
 
 import boto3
 from botocore.config import Config
@@ -81,7 +81,7 @@ class StorageService:
         await asyncio.to_thread(self._delete_object, key=key)
 
 
-@lru_cache(maxsize=1)
+@cache
 def get_storage_service() -> StorageService:
     return StorageService()
 

@@ -18,8 +18,13 @@ const MAX_DOCUMENT_SIZE_BYTES = 50 * 1024 * 1024
 const ALLOWED_EXTENSIONS = new Set(['pdf', 'xlsx', 'csv', 'docx'])
 
 function getFileExtension(filename: string) {
-  const extension = filename.split('.').pop()
-  return extension?.toLowerCase() ?? ''
+  const lastDotIndex = filename.lastIndexOf('.')
+
+  if (lastDotIndex <= 0 || lastDotIndex === filename.length - 1) {
+    return ''
+  }
+
+  return filename.slice(lastDotIndex + 1).toLowerCase()
 }
 
 function getUploadId(file: File) {
@@ -29,6 +34,7 @@ function getUploadId(file: File) {
 export function ProjectDocumentsPage() {
   const { projectId } = useParams()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const uploadFilesRef = useRef<Map<string, File>>(new Map())
   const [project, setProject] = useState<ProjectRecord | null>(null)
   const [documents, setDocuments] = useState<ProjectDocument[]>([])
   const [uploads, setUploads] = useState<PendingUpload[]>([])
@@ -102,6 +108,70 @@ export function ProjectDocumentsPage() {
     }
   }
 
+  async function uploadSingleFile(currentProjectId: string, file: File) {
+    const uploadId = getUploadId(file)
+
+    try {
+      const uploadSession = await createProjectDocumentUpload(
+        currentProjectId,
+        {
+          filename: file.name,
+          file_size_bytes: file.size,
+        }
+      )
+
+      setUploads((current) =>
+        current.map((upload) =>
+          upload.id === uploadId
+            ? { ...upload, progress: 0, status: 'uploading', error: undefined }
+            : upload
+        )
+      )
+
+      await uploadFileToPresignedUrl(
+        file,
+        uploadSession.upload_url,
+        uploadSession.content_type,
+        (progress) => {
+          setUploads((current) =>
+            current.map((upload) =>
+              upload.id === uploadId ? { ...upload, progress } : upload
+            )
+          )
+        }
+      )
+
+      await confirmProjectDocumentUpload(
+        currentProjectId,
+        uploadSession.document_id
+      )
+
+      uploadFilesRef.current.delete(uploadId)
+      setUploads((current) =>
+        current.filter((upload) => upload.id !== uploadId)
+      )
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível concluir o upload.'
+
+      setUploads((current) =>
+        current.map((upload) =>
+          upload.id === uploadId
+            ? {
+                ...upload,
+                error: message,
+                progress: 100,
+                status: 'error',
+              }
+            : upload
+        )
+      )
+      throw error
+    }
+  }
+
   async function handleFilesSelected(files: File[]) {
     if (!projectId || files.length === 0) {
       return
@@ -146,62 +216,63 @@ export function ProjectDocumentsPage() {
       status: 'uploading' as const,
     }))
 
+    validFiles.forEach((file) => {
+      uploadFilesRef.current.set(getUploadId(file), file)
+    })
+
     setUploads((current) => [...initialUploads, ...current])
 
     try {
       await Promise.all(
         validFiles.map(async (file) => {
-          const uploadId = getUploadId(file)
-
           try {
-            const uploadSession = await createProjectDocumentUpload(projectId, {
-              filename: file.name,
-              file_size_bytes: file.size,
-            })
-
-            await uploadFileToPresignedUrl(
-              file,
-              uploadSession.upload_url,
-              uploadSession.content_type,
-              (progress) => {
-                setUploads((current) =>
-                  current.map((upload) =>
-                    upload.id === uploadId ? { ...upload, progress } : upload
-                  )
-                )
-              }
-            )
-
-            await confirmProjectDocumentUpload(
-              projectId,
-              uploadSession.document_id
-            )
-
-            setUploads((current) =>
-              current.filter((upload) => upload.id !== uploadId)
-            )
-          } catch (error) {
-            const message =
-              error instanceof Error
-                ? error.message
-                : 'Não foi possível concluir o upload.'
-
-            setUploads((current) =>
-              current.map((upload) =>
-                upload.id === uploadId
-                  ? {
-                      ...upload,
-                      error: message,
-                      progress: 100,
-                      status: 'error',
-                    }
-                  : upload
-              )
-            )
+            await uploadSingleFile(projectId, file)
+          } catch {
+            return
           }
         })
       )
 
+      await refreshDocuments(projectId)
+    } catch (error) {
+      setPageError(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível concluir o fluxo de upload.'
+      )
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  function removeUpload(uploadId: string) {
+    uploadFilesRef.current.delete(uploadId)
+    setUploads((current) => current.filter((upload) => upload.id !== uploadId))
+  }
+
+  async function retryUpload(uploadId: string) {
+    if (!projectId) {
+      return
+    }
+
+    const file = uploadFilesRef.current.get(uploadId)
+    if (!file) {
+      setPageError('Não foi possível reenviar o arquivo selecionado.')
+      return
+    }
+
+    setPageError(null)
+    setIsUploading(true)
+    setUploads((current) =>
+      current.map((upload) =>
+        upload.id === uploadId
+          ? { ...upload, progress: 0, status: 'uploading', error: undefined }
+          : upload
+      )
+    )
+
+    try {
+      await uploadSingleFile(projectId, file)
       await refreshDocuments(projectId)
     } catch (error) {
       setPageError(
@@ -258,6 +329,10 @@ export function ProjectDocumentsPage() {
           inputRef={fileInputRef}
           onFilesSelected={(files) => {
             void handleFilesSelected(files)
+          }}
+          onRemoveUpload={removeUpload}
+          onRetryUpload={(uploadId) => {
+            void retryUpload(uploadId)
           }}
           uploads={uploads}
           validationMessage={validationMessage}

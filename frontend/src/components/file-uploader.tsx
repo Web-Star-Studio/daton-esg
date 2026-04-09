@@ -12,6 +12,8 @@ type FileUploaderProps = {
   disabled?: boolean
   inputRef: RefObject<HTMLInputElement | null>
   onFilesSelected: (files: File[]) => void
+  onRemoveUpload?: (uploadId: string) => void
+  onRetryUpload?: (uploadId: string) => void
   uploads: PendingUpload[]
   validationMessage: string | null
 }
@@ -20,6 +22,8 @@ export function FileUploader({
   disabled = false,
   inputRef,
   onFilesSelected,
+  onRemoveUpload,
+  onRetryUpload,
   uploads,
   validationMessage,
 }: FileUploaderProps) {
@@ -125,6 +129,28 @@ export function FileUploader({
                     style={{ width: `${clampedProgress}%` }}
                   />
                 </div>
+                {upload.status === 'error' ? (
+                  <div className="mt-3 flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onRemoveUpload?.(upload.id)
+                      }}
+                      className="apple-focus-ring rounded-[0.7rem] px-3 py-1.5 text-[12px] font-medium tracking-[-0.01em] text-[#86868b] transition-colors hover:bg-black/[0.04] hover:text-[#1d1d1f]"
+                    >
+                      Dismiss
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onRetryUpload?.(upload.id)
+                      }}
+                      className="apple-focus-ring rounded-[0.7rem] bg-[#1d1d1f] px-3 py-1.5 text-[12px] font-medium tracking-[-0.01em] text-white transition-opacity hover:opacity-90"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : null}
               </div>
             )
           })}
