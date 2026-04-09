@@ -85,6 +85,7 @@ export function DashboardPage() {
       activeSidebarKey="indicators"
       companyName={COMPANY_PLACEHOLDER}
       pageAction={{
+        disabled: true,
         label: 'Salvar Alterações',
         icon: 'save',
         onClick: () => undefined,
@@ -103,42 +104,49 @@ export function DashboardPage() {
             </h3>
 
             <div className="flex flex-col gap-1">
-              {section.items.map((item) => (
-                <div
-                  key={`${section.title}-${item.code}`}
-                  className="group flex items-center justify-between rounded-xl px-5 py-3.5 transition-colors hover:bg-[#e8e8ed]/40"
-                >
-                  <div className="flex flex-col">
-                    <span className="text-[13px] font-medium tracking-[-0.01em] text-[#1d1d1f]">
-                      {item.label}
-                    </span>
-                    <span className="text-[12px] text-[#86868b]">
-                      {item.code}
-                    </span>
-                  </div>
+              {section.items.map((item) => {
+                const itemKey = `${section.title}-${item.code}`
+                const inputId = `indicator-${itemKey}`
 
-                  <div className="flex items-center gap-4">
-                    <input
-                      type="text"
-                      value={
-                        indicatorValues[`${section.title}-${item.code}`] ?? ''
-                      }
-                      onChange={(event) => {
-                        const nextValue = event.target.value
-                        setIndicatorValues((current) => ({
-                          ...current,
-                          [`${section.title}-${item.code}`]: nextValue,
-                        }))
-                      }}
-                      placeholder="0"
-                      className="apple-focus-ring w-36 rounded border-0 bg-[#e8e8ed] px-4 py-1.5 text-right text-[13px] font-semibold text-[#1d1d1f] transition-all focus:ring-2 focus:ring-primary/20"
-                    />
-                    <span className="w-12 text-[12px] font-medium text-[#86868b]">
-                      {item.unit}
-                    </span>
+                return (
+                  <div
+                    key={itemKey}
+                    className="group flex items-center justify-between rounded-xl px-5 py-3.5 transition-colors hover:bg-[#e8e8ed]/40"
+                  >
+                    <div className="flex flex-col">
+                      <label
+                        htmlFor={inputId}
+                        className="text-[13px] font-medium tracking-[-0.01em] text-[#1d1d1f]"
+                      >
+                        {item.label}
+                      </label>
+                      <span className="text-[12px] text-[#86868b]">
+                        {item.code}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <input
+                        id={inputId}
+                        type="text"
+                        value={indicatorValues[itemKey] ?? ''}
+                        onChange={(event) => {
+                          const nextValue = event.target.value
+                          setIndicatorValues((current) => ({
+                            ...current,
+                            [itemKey]: nextValue,
+                          }))
+                        }}
+                        placeholder="0"
+                        className="apple-focus-ring w-36 rounded border-0 bg-[#e8e8ed] px-4 py-1.5 text-right text-[13px] font-semibold text-[#1d1d1f] transition-all focus:ring-2 focus:ring-primary/20"
+                      />
+                      <span className="w-12 text-[12px] font-medium text-[#86868b]">
+                        {item.unit}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </section>
         ))}

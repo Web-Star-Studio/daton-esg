@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
+from botocore.exceptions import ClientError
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -128,7 +129,7 @@ async def create_document_upload(
     await session.commit()
     await session.refresh(document)
 
-    upload_url = storage.generate_presigned_upload_url(
+    upload_url = await storage.generate_presigned_upload_url(
         key=s3_key,
         content_type=content_type,
     )
@@ -143,16 +144,19 @@ async def confirm_document_upload(
     metadata_getter: Callable[[StorageService, str], StorageObjectMetadata]
     | None = None,
 ) -> Document:
-    metadata_getter = metadata_getter or (
-        lambda service, key: service.get_object_metadata(key=key)
-    )
-    try:
+    if metadata_getter is None:
+        try:
+            metadata = await storage.get_object_metadata(key=document.s3_key)
+        except ClientError as exc:
+            code = exc.response.get("Error", {}).get("Code")
+            if code in {"404", "NoSuchKey", "NotFound"}:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Upload not found in storage",
+                ) from exc
+            raise
+    else:
         metadata = metadata_getter(storage, document.s3_key)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Upload not found in storage",
-        ) from exc
 
     if metadata.content_length is not None:
         document.file_size_bytes = metadata.content_length
@@ -168,6 +172,10 @@ async def delete_document(
     document: Document,
     storage: StorageService,
 ) -> None:
-    storage.delete_object(key=document.s3_key)
     await session.delete(document)
     await session.commit()
+    try:
+        await storage.delete_object(key=document.s3_key)
+    except Exception:
+        # TODO: enqueue retry/cleanup once background jobs exist.
+        pass

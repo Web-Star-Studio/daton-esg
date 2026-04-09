@@ -42,6 +42,16 @@ const mockConfirmProjectDocumentUpload = vi.mocked(confirmProjectDocumentUpload)
 const mockDeleteProjectDocument = vi.mocked(deleteProjectDocument)
 const mockUploadFileToPresignedUrl = vi.mocked(uploadFileToPresignedUrl)
 
+function getAssertedFileInput(container: HTMLElement) {
+  const input = container.querySelector('input[type="file"]')
+
+  if (!(input instanceof HTMLInputElement)) {
+    throw new Error('Expected a file input in ProjectDocumentsPage')
+  }
+
+  return input
+}
+
 function renderPage() {
   return render(
     <MemoryRouter initialEntries={['/projects/project-1']}>
@@ -123,9 +133,7 @@ describe('ProjectDocumentsPage', () => {
       ).toBeInTheDocument()
     })
 
-    const fileInput = container.querySelector(
-      'input[type="file"]'
-    ) as HTMLInputElement
+    const fileInput = getAssertedFileInput(container)
 
     fireEvent.change(fileInput, {
       target: {
@@ -177,9 +185,7 @@ describe('ProjectDocumentsPage', () => {
       ).toBeInTheDocument()
     })
 
-    const fileInput = container.querySelector(
-      'input[type="file"]'
-    ) as HTMLInputElement
+    const fileInput = getAssertedFileInput(container)
 
     fireEvent.change(fileInput, {
       target: {

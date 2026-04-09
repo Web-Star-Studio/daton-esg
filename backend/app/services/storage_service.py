@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -35,7 +36,7 @@ class StorageService:
             **client_kwargs,
         )
 
-    def generate_presigned_upload_url(
+    def _generate_presigned_upload_url(
         self,
         *,
         key: str,
@@ -52,12 +53,32 @@ class StorageService:
             ExpiresIn=expires_in_seconds,
         )
 
-    def get_object_metadata(self, *, key: str) -> StorageObjectMetadata:
+    def _get_object_metadata(self, *, key: str) -> StorageObjectMetadata:
         response = self._client.head_object(Bucket=self.bucket_name, Key=key)
         return StorageObjectMetadata(content_length=response.get("ContentLength"))
 
-    def delete_object(self, *, key: str) -> None:
+    def _delete_object(self, *, key: str) -> None:
         self._client.delete_object(Bucket=self.bucket_name, Key=key)
+
+    async def generate_presigned_upload_url(
+        self,
+        *,
+        key: str,
+        content_type: str,
+        expires_in_seconds: int = 900,
+    ) -> str:
+        return await asyncio.to_thread(
+            self._generate_presigned_upload_url,
+            key=key,
+            content_type=content_type,
+            expires_in_seconds=expires_in_seconds,
+        )
+
+    async def get_object_metadata(self, *, key: str) -> StorageObjectMetadata:
+        return await asyncio.to_thread(self._get_object_metadata, key=key)
+
+    async def delete_object(self, *, key: str) -> None:
+        await asyncio.to_thread(self._delete_object, key=key)
 
 
 @lru_cache(maxsize=1)
@@ -65,9 +86,9 @@ def get_storage_service() -> StorageService:
     return StorageService()
 
 
-def object_exists(service: StorageService, *, key: str) -> bool:
+async def object_exists(service: StorageService, *, key: str) -> bool:
     try:
-        service.get_object_metadata(key=key)
+        await service.get_object_metadata(key=key)
         return True
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code")

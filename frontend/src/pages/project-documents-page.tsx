@@ -93,8 +93,13 @@ export function ProjectDocumentsPage() {
   }, [projectId])
 
   async function refreshDocuments(currentProjectId: string) {
-    const nextDocuments = await fetchProjectDocuments(currentProjectId)
-    setDocuments(nextDocuments)
+    try {
+      const nextDocuments = await fetchProjectDocuments(currentProjectId)
+      setDocuments(nextDocuments)
+    } catch (error) {
+      console.error('Failed to refresh project documents', error)
+      throw new Error('Falha ao atualizar a lista de documentos do projeto.')
+    }
   }
 
   async function handleFilesSelected(files: File[]) {

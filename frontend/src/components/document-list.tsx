@@ -12,7 +12,7 @@ function formatFileSize(fileSizeBytes: number | null) {
   }
 
   if (fileSizeBytes < 1024 * 1024) {
-    return `${Math.round(fileSizeBytes / 1024)} KB`
+    return `${Math.max(1, Math.round(fileSizeBytes / 1024))} KB`
   }
 
   return `${(fileSizeBytes / (1024 * 1024)).toFixed(1)} MB`

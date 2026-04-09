@@ -27,6 +27,7 @@ type SidebarItemKey =
   | 'branding'
 
 type PageAction = {
+  disabled?: boolean
   label: string
   icon: string
   onClick: () => void
@@ -115,6 +116,7 @@ export function ProjectShell({
     left: number
   } | null>(null)
   const profileMenuRef = useRef<HTMLDivElement | null>(null)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
   const initials = useMemo(
     () => getInitials(user?.name, user?.email),
     [user?.email, user?.name]
@@ -158,6 +160,36 @@ export function ProjectShell({
       window.removeEventListener('resize', handleWindowChange)
     }
   }, [sidebarTooltip])
+
+  useEffect(() => {
+    function handleWindowKeyDown(event: KeyboardEvent) {
+      const isShortcut =
+        (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k'
+
+      if (!isShortcut) {
+        return
+      }
+
+      const target = event.target
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return
+      }
+
+      event.preventDefault()
+      searchInputRef.current?.focus()
+    }
+
+    window.addEventListener('keydown', handleWindowKeyDown)
+
+    return () => {
+      window.removeEventListener('keydown', handleWindowKeyDown)
+    }
+  }, [])
 
   function showSidebarTooltip(
     event:
@@ -222,8 +254,10 @@ export function ProjectShell({
                 search
               </span>
               <input
+                ref={searchInputRef}
                 type="search"
                 placeholder="Buscar"
+                aria-label="Buscar no workspace"
                 className="w-full border-0 bg-transparent p-0 text-[13px] tracking-[-0.01em] text-[#1d1d1f] placeholder:text-[#86868b] focus:outline-none focus:ring-0"
               />
               <span className="rounded-full bg-[#e8e8ed] px-2 py-0.5 text-[10px] font-medium tracking-tight text-[#86868b]">
@@ -237,7 +271,8 @@ export function ProjectShell({
               <button
                 type="button"
                 onClick={pageAction.onClick}
-                className="apple-focus-ring inline-flex items-center gap-2 rounded-[0.7rem] bg-primary px-4 py-2 text-[12px] font-medium tracking-[-0.01em] text-white transition-all hover:opacity-90 active:scale-95"
+                className="apple-focus-ring inline-flex items-center gap-2 rounded-[0.7rem] bg-primary px-4 py-2 text-[12px] font-medium tracking-[-0.01em] text-white transition-all hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:opacity-55 disabled:active:scale-100"
+                disabled={pageAction.disabled}
               >
                 <span
                   aria-hidden="true"

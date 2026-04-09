@@ -185,6 +185,11 @@ export function uploadFileToPresignedUrl(
       reject(new Error('Não foi possível enviar o arquivo para o storage.'))
     })
 
+    request.addEventListener('abort', () => {
+      onProgress?.(0)
+      reject(new Error('Upload aborted'))
+    })
+
     request.send(file)
   })
 }

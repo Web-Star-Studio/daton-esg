@@ -45,12 +45,13 @@ def make_project(user: User) -> Project:
 
 
 def make_document(project: Project) -> Document:
+    document_id = uuid4()
     return Document(
-        id=uuid4(),
+        id=document_id,
         project_id=project.id,
         filename="inventario.pdf",
         file_type=DocumentFileType.PDF,
-        s3_key="uploads/project/document/inventario.pdf",
+        s3_key=f"uploads/{project.id}/{document_id}/inventario.pdf",
         file_size_bytes=2048,
         parsing_status=DocumentParsingStatus.PENDING,
         created_at=datetime.now(timezone.utc),
@@ -84,6 +85,9 @@ def test_create_document_upload_returns_presigned_url(
     document = make_document(project)
 
     async def fake_get_project_for_user(_session, _project_id, _user_id):
+        assert _session is session
+        assert _project_id == project.id
+        assert _user_id == user.id
         return project
 
     async def fake_create_document_upload(_session, **kwargs):
@@ -116,11 +120,14 @@ def test_create_document_upload_returns_presigned_url(
 
 
 def test_list_documents_returns_project_documents(monkeypatch, documents_app) -> None:
-    app, _, user = documents_app
+    app, session, user = documents_app
     project = make_project(user)
     document = make_document(project)
 
     async def fake_get_project_for_user(_session, _project_id, _user_id):
+        assert _session is session
+        assert _project_id == project.id
+        assert _user_id == user.id
         return project
 
     async def fake_list_documents_for_project(_session, _project_id):
@@ -145,11 +152,14 @@ def test_list_documents_returns_project_documents(monkeypatch, documents_app) ->
 
 
 def test_delete_document_returns_no_content(monkeypatch, documents_app) -> None:
-    app, _, user = documents_app
+    app, session, user = documents_app
     project = make_project(user)
     document = make_document(project)
 
     async def fake_get_project_for_user(_session, _project_id, _user_id):
+        assert _session is session
+        assert _project_id == project.id
+        assert _user_id == user.id
         return project
 
     async def fake_get_document_for_project(_session, _project_id, _document_id):

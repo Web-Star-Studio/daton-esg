@@ -46,7 +46,7 @@ class FakeStorage:
     def __init__(self) -> None:
         self.deleted_keys: list[str] = []
 
-    def generate_presigned_upload_url(
+    async def generate_presigned_upload_url(
         self,
         *,
         key: str,
@@ -58,10 +58,10 @@ class FakeStorage:
             f"?content_type={content_type}&expires={expires_in_seconds}"
         )
 
-    def get_object_metadata(self, *, key: str) -> StorageObjectMetadata:
+    async def get_object_metadata(self, *, key: str) -> StorageObjectMetadata:
         return StorageObjectMetadata(content_length=2048)
 
-    def delete_object(self, *, key: str) -> None:
+    async def delete_object(self, *, key: str) -> None:
         self.deleted_keys.append(key)
 
 
@@ -86,14 +86,15 @@ def make_project() -> Project:
 
 
 def make_document(project: Project) -> Document:
+    document_id = uuid4()
     return Document(
-        id=uuid4(),
+        id=document_id,
         project_id=project.id,
         filename="inventario.pdf",
         file_type=DocumentFileType.PDF,
         s3_key=build_document_s3_key(
             project_id=project.id,
-            document_id=uuid4(),
+            document_id=document_id,
             filename="inventario.pdf",
         ),
         file_size_bytes=1024,
