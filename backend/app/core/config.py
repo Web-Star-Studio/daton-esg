@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     aws_textract_region: str | None = None
     document_parsing_pdf_provider: str = "auto"
     anthropic_api_key: SecretStr | None = None
-    classification_model: str = "claude-sonnet-4-6-20250514"
+    classification_model: str = "claude-sonnet-4-6"
     classification_temperature: float = 0.0
     aws_cognito_region: str = "us-east-1"
     aws_cognito_user_pool_id: str = "us-east-1_example123"
