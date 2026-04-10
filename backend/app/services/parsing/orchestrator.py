@@ -129,11 +129,14 @@ async def run_document_parsing(
                 )
                 if attempt < MAX_PARSE_ATTEMPTS:
                     document.parsing_status = DocumentParsingStatus.PENDING
+                    document.extracted_text = None
+                    document.parsed_payload = None
                     document.parsing_error = None
                     await session.commit()
                     continue
 
                 document.parsing_status = DocumentParsingStatus.FAILED
+                document.extracted_text = None
                 document.parsed_payload = None
                 document.parsing_error = PARSING_FAILURE_MESSAGE
                 await session.commit()

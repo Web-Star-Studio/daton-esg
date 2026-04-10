@@ -36,6 +36,12 @@ class FakeStorage:
     def __init__(self, payload: bytes) -> None:
         self.payload = payload
         self.keys: list[str] = []
+        self.bucket_name = "documents-bucket"
+        self.settings = SimpleNamespace(
+            document_parsing_pdf_provider="textract",
+            environment="production",
+            aws_endpoint_url="",
+        )
 
     async def get_object_bytes(self, *, key: str) -> bytes:
         self.keys.append(key)
@@ -429,9 +435,10 @@ async def test_run_document_parsing_uses_s3_textract_path_for_pdf(monkeypatch) -
     document = make_document(project, file_type=DocumentFileType.PDF)
     session = FakeSession(document)
     storage = ExplodingStorage(b"%PDF-1.4")
+    called_kwargs: dict[str, object] = {}
 
-    async def fake_parse_document(_document: Document, *, storage_service):
-        assert storage_service is storage
+    async def fake_parse_document(**kwargs):
+        called_kwargs.update(kwargs)
         return ParsedDocumentResult(
             extracted_text="Texto OCR",
             parsed_payload={"provider": "textract", "job_id": "job-789", "tables": []},
@@ -442,12 +449,15 @@ async def test_run_document_parsing_uses_s3_textract_path_for_pdf(monkeypatch) -
         lambda: FakeSessionContext(session),
     )
     monkeypatch.setattr(
-        "app.services.parsing.orchestrator._parse_document_by_type",
+        "app.services.parsing.orchestrator.parse_pdf_document",
         fake_parse_document,
     )
 
     await run_document_parsing(document.id, storage=storage)
 
+    assert called_kwargs["bucket_name"] == storage.bucket_name
+    assert called_kwargs["key"] == document.s3_key
+    assert called_kwargs["settings"] is storage.settings
     assert document.parsing_status == DocumentParsingStatus.COMPLETED
     assert document.extracted_text == "Texto OCR"
     assert document.parsed_payload["job_id"] == "job-789"
@@ -558,6 +568,8 @@ async def test_run_document_parsing_returns_when_document_is_already_completed(
 async def test_run_document_parsing_retries_once_then_fails(monkeypatch) -> None:
     project = make_project()
     document = make_document(project, file_type=DocumentFileType.CSV)
+    document.extracted_text = "Texto anterior"
+    document.parsed_payload = {"provider": "local"}
     session = FakeSession(document)
     storage = FakeStorage(b"Indicador,Valor\nEnergia,1500\n")
     attempts = {"count": 0}
@@ -581,6 +593,8 @@ async def test_run_document_parsing_retries_once_then_fails(monkeypatch) -> None
     assert attempts["count"] == 2
     assert session.rollback_count == 2
     assert document.parsing_status == DocumentParsingStatus.FAILED
+    assert document.extracted_text is None
+    assert document.parsed_payload is None
     assert document.parsing_error == "Parsing failed"
 
 
