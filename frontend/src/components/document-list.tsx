@@ -33,7 +33,7 @@ function getParsingStatusLabel(status: ProjectDocument['parsing_status']) {
 }
 
 const PARSING_FAILURE_MESSAGE =
-  "We couldn't process this document. Please try again or contact support."
+  'Não foi possível processar este documento. Tente novamente ou contate o suporte.'
 
 export function DocumentList({
   deletingDocumentId,

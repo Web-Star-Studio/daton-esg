@@ -8,6 +8,7 @@ from uuid import uuid4
 import pytest
 from docx import Document as DocxDocument
 from openpyxl import Workbook
+from sqlalchemy.dialects import postgresql
 
 from app.models import Document, Project
 from app.models.enums import (
@@ -58,6 +59,7 @@ class FakeSession:
     def __init__(self, document: Document | None) -> None:
         self.document = document
         self.commit_count = 0
+        self.rollback_count = 0
         self.statements = []
 
     async def execute(self, _statement):
@@ -66,6 +68,9 @@ class FakeSession:
 
     async def commit(self) -> None:
         self.commit_count += 1
+
+    async def rollback(self) -> None:
+        self.rollback_count += 1
 
     def begin(self):
         return FakeTransaction(self)
@@ -414,7 +419,8 @@ async def test_run_document_parsing_marks_document_completed(monkeypatch) -> Non
     assert document.parsed_payload is not None
     assert "Energia" in (document.extracted_text or "")
     assert session.commit_count == 2
-    assert session.statements[0]._for_update_arg is not None
+    compiled = session.statements[0].compile(dialect=postgresql.dialect())
+    assert "FOR UPDATE" in str(compiled)
 
 
 @pytest.mark.asyncio
@@ -511,7 +517,41 @@ async def test_run_document_parsing_returns_when_document_is_already_processing(
 
     assert parse_called is False
     assert session.commit_count == 1
-    assert session.statements[0]._for_update_arg is not None
+    compiled = session.statements[0].compile(dialect=postgresql.dialect())
+    assert "FOR UPDATE" in str(compiled)
+
+
+@pytest.mark.asyncio
+async def test_run_document_parsing_returns_when_document_is_already_completed(
+    monkeypatch,
+) -> None:
+    project = make_project()
+    document = make_document(project, file_type=DocumentFileType.CSV)
+    document.parsing_status = DocumentParsingStatus.COMPLETED
+    session = FakeSession(document)
+    storage = FakeStorage(b"Indicador,Valor\nEnergia,1500\n")
+    parse_called = False
+
+    async def fake_parse_document(_document: Document, *, storage_service):
+        nonlocal parse_called
+        parse_called = True
+        return ParsedDocumentResult(extracted_text="", parsed_payload={})
+
+    monkeypatch.setattr(
+        "app.services.parsing.orchestrator.SessionLocal",
+        lambda: FakeSessionContext(session),
+    )
+    monkeypatch.setattr(
+        "app.services.parsing.orchestrator._parse_document_by_type",
+        fake_parse_document,
+    )
+
+    await run_document_parsing(document.id, storage=storage)
+
+    assert parse_called is False
+    assert session.commit_count == 1
+    compiled = session.statements[0].compile(dialect=postgresql.dialect())
+    assert "FOR UPDATE" in str(compiled)
 
 
 @pytest.mark.asyncio
@@ -539,8 +579,9 @@ async def test_run_document_parsing_retries_once_then_fails(monkeypatch) -> None
     await run_document_parsing(document.id, storage=storage)
 
     assert attempts["count"] == 2
+    assert session.rollback_count == 2
     assert document.parsing_status == DocumentParsingStatus.FAILED
-    assert document.parsing_error == "falha 2"
+    assert document.parsing_error == "Parsing failed"
 
 
 def test_storage_service_get_object_bytes_closes_streaming_body() -> None:

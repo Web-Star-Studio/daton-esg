@@ -23,6 +23,7 @@ from app.services.storage_service import StorageService, get_storage_service
 logger = logging.getLogger(__name__)
 
 MAX_PARSE_ATTEMPTS = 2
+PARSING_FAILURE_MESSAGE = "Parsing failed"
 
 
 async def _parse_document_by_type(
@@ -66,9 +67,7 @@ async def run_document_parsing(
         async with SessionLocal() as session:
             async with session.begin():
                 result = await session.execute(
-                    select(Document)
-                    .where(Document.id == document_id)
-                    .with_for_update()
+                    select(Document).where(Document.id == document_id).with_for_update()
                 )
                 document = result.scalar_one_or_none()
                 if document is None:
@@ -78,10 +77,16 @@ async def run_document_parsing(
                     )
                     return
 
-                if document.parsing_status == DocumentParsingStatus.PROCESSING:
+                if document.parsing_status in {
+                    DocumentParsingStatus.PROCESSING,
+                    DocumentParsingStatus.COMPLETED,
+                }:
                     logger.info(
-                        "document_parsing.already_processing",
-                        extra={"document_id": str(document.id)},
+                        "document_parsing.already_terminal_or_processing",
+                        extra={
+                            "document_id": str(document.id),
+                            "parsing_status": document.parsing_status.value,
+                        },
                     )
                     return
 
@@ -114,6 +119,7 @@ async def run_document_parsing(
                 )
                 return
             except Exception as exc:
+                await session.rollback()
                 logger.exception(
                     "document_parsing.failed_attempt",
                     extra={
@@ -129,10 +135,10 @@ async def run_document_parsing(
 
                 document.parsing_status = DocumentParsingStatus.FAILED
                 document.parsed_payload = None
-                document.parsing_error = str(exc)
+                document.parsing_error = PARSING_FAILURE_MESSAGE
                 await session.commit()
                 logger.error(
                     "document_parsing.failed",
-                    extra={"document_id": str(document.id)},
+                    extra={"document_id": str(document.id), "error": str(exc)},
                 )
                 return

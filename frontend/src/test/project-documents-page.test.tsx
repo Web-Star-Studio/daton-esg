@@ -395,9 +395,11 @@ describe('ProjectDocumentsPage', () => {
     expect(await screen.findByText('inventario.pdf')).toBeInTheDocument()
     expect(
       screen.getByText(
-        "We couldn't process this document. Please try again or contact support."
+        'Não foi possível processar este documento. Tente novamente ou contate o suporte.'
       )
     ).toBeInTheDocument()
-    expect(screen.queryByText('Falha ao processar o PDF.')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Falha ao processar o PDF.')
+    ).not.toBeInTheDocument()
   })
 })
