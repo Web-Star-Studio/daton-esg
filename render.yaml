@@ -1,6 +1,6 @@
 databases:
   - name: daton-esg-db
-    plan: starter
+    plan: basic_256mb
     databaseName: daton_esg
     user: daton
     postgresMajorVersion: "16"
