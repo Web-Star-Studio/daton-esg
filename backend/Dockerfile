@@ -16,4 +16,4 @@ COPY alembic ./alembic
 COPY app ./app
 COPY render-start.sh ./
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["bash", "render-start.sh"]

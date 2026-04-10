@@ -42,7 +42,6 @@ services:
         value: us-east-1
       - key: ANTHROPIC_API_KEY
         sync: false
-    startCommand: bash render-start.sh
 
   - type: web
     name: daton-esg-frontend
