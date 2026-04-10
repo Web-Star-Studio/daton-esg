@@ -32,8 +32,19 @@ function getParsingStatusLabel(status: ProjectDocument['parsing_status']) {
   }
 }
 
-const PARSING_FAILURE_MESSAGE =
-  'Não foi possível processar este documento. Tente novamente ou contate o suporte.'
+function getParsingStatusColor(status: ProjectDocument['parsing_status']) {
+  switch (status) {
+    case 'completed':
+      return 'bg-[#e8f5e8] text-[#1a7a1a]'
+    case 'failed':
+      return 'bg-[#fff0f0] text-[#d01f1f]'
+    case 'processing':
+      return 'bg-[#fff8e8] text-[#9a6700]'
+    case 'pending':
+    default:
+      return 'bg-[#f0f0f5] text-[#86868b]'
+  }
+}
 
 export function DocumentList({
   deletingDocumentId,
@@ -41,66 +52,87 @@ export function DocumentList({
   onDelete,
 }: DocumentListProps) {
   if (documents.length === 0) {
-    return (
-      <div className="rounded-lg border border-dashed border-[#d2d2d7] bg-[#f5f7f8] px-5 py-6">
-        <p className="text-[13px] font-medium tracking-[-0.01em] text-[#1d1d1f]">
-          Nenhum documento enviado ainda.
-        </p>
-        <p className="mt-1 text-[12px] tracking-[-0.01em] text-[#86868b]">
-          Use a área acima para subir evidências e planilhas do projeto.
-        </p>
-      </div>
-    )
+    return null
   }
 
   return (
     <div className="overflow-hidden rounded-lg border border-black/6 bg-white">
-      <ul className="divide-y divide-black/6">
-        {documents.map((document) => (
-          <li
-            key={document.id}
-            className="flex items-center justify-between gap-4 px-5 py-4"
-          >
-            <div className="min-w-0 space-y-1">
-              <p className="truncate text-[13px] font-medium tracking-[-0.01em] text-[#1d1d1f]">
-                {document.filename}
-              </p>
-              <div className="flex flex-wrap items-center gap-2 text-[12px] tracking-[-0.01em] text-[#86868b]">
-                <span>{document.file_type.toUpperCase()}</span>
-                <span aria-hidden="true">•</span>
-                <span>{formatFileSize(document.file_size_bytes)}</span>
-                <span aria-hidden="true">•</span>
-                <span>{getParsingStatusLabel(document.parsing_status)}</span>
-              </div>
-              {document.parsing_status === 'failed' &&
-              document.parsing_error ? (
-                <p className="text-[12px] tracking-[-0.01em] text-[#d01f1f]">
-                  {PARSING_FAILURE_MESSAGE}
-                </p>
-              ) : null}
-            </div>
-
+      <table className="w-full border-collapse text-left">
+        <thead className="sticky top-0 z-10 bg-white">
+          <tr>
+            <th className="h-10 w-[40%] border-b border-[#e5e5ea] px-6 align-middle text-[12px] font-medium uppercase tracking-[0.5px] text-[#86868b]">
+              Nome
+            </th>
+            <th className="h-10 w-[12%] border-b border-[#e5e5ea] px-6 align-middle text-[12px] font-medium uppercase tracking-[0.5px] text-[#86868b]">
+              Tipo
+            </th>
+            <th className="h-10 w-[15%] border-b border-[#e5e5ea] px-6 align-middle text-[12px] font-medium uppercase tracking-[0.5px] text-[#86868b]">
+              Tamanho
+            </th>
+            <th className="h-10 w-[18%] border-b border-[#e5e5ea] px-6 align-middle text-[12px] font-medium uppercase tracking-[0.5px] text-[#86868b]">
+              Status
+            </th>
             {onDelete ? (
-              <button
-                type="button"
-                onClick={() => {
-                  onDelete(document.id)
-                }}
-                disabled={deletingDocumentId === document.id}
-                className="apple-focus-ring inline-flex items-center gap-2 rounded-[0.7rem] px-3 py-2 text-[12px] font-medium tracking-[-0.01em] text-[#1d1d1f] transition-colors hover:bg-black/[0.04] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <span
-                  aria-hidden="true"
-                  className="material-symbols-outlined text-[16px] text-[#86868b]"
-                >
-                  delete
-                </span>
-                Remover
-              </button>
+              <th className="h-10 w-[15%] border-b border-[#e5e5ea] px-6 align-middle text-right text-[12px] font-medium uppercase tracking-[0.5px] text-[#86868b]">
+                Ações
+              </th>
             ) : null}
-          </li>
-        ))}
-      </ul>
+          </tr>
+        </thead>
+        <tbody>
+          {documents.map((document) => (
+            <tr
+              key={document.id}
+              className="border-b border-[#f5f5f7] transition-colors last:border-none hover:bg-[#f5f5f7]"
+            >
+              <td className="h-12 px-6 align-middle">
+                <p className="truncate text-sm font-medium text-[#1d1d1f]">
+                  {document.filename}
+                </p>
+                {document.parsing_status === 'failed' &&
+                document.parsing_error ? (
+                  <p className="mt-0.5 truncate text-[11px] text-[#d01f1f]">
+                    Erro no processamento
+                  </p>
+                ) : null}
+              </td>
+              <td className="h-12 px-6 align-middle text-sm text-[#1d1d1f]">
+                {document.file_type.toUpperCase()}
+              </td>
+              <td className="h-12 px-6 align-middle text-sm text-[#86868b]">
+                {formatFileSize(document.file_size_bytes)}
+              </td>
+              <td className="h-12 px-6 align-middle">
+                <span
+                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium tracking-[-0.01em] ${getParsingStatusColor(document.parsing_status)}`}
+                >
+                  {getParsingStatusLabel(document.parsing_status)}
+                </span>
+              </td>
+              {onDelete ? (
+                <td className="h-12 px-6 align-middle text-right">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onDelete(document.id)
+                    }}
+                    disabled={deletingDocumentId === document.id}
+                    className="apple-focus-ring inline-flex items-center gap-1.5 rounded-[0.7rem] px-2.5 py-1.5 text-[12px] font-medium tracking-[-0.01em] text-[#86868b] transition-colors hover:bg-black/[0.04] hover:text-[#1d1d1f] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="material-symbols-outlined text-[15px]"
+                    >
+                      delete
+                    </span>
+                    Remover
+                  </button>
+                </td>
+              ) : null}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

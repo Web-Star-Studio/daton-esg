@@ -66,7 +66,7 @@ export function FileUploader({
           event.preventDefault()
         }}
         onDrop={handleDrop}
-        className="apple-focus-ring flex w-full flex-col items-start gap-3 rounded-lg border border-dashed border-[#d2d2d7] bg-[#f5f7f8] px-5 py-6 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60"
+        className="apple-focus-ring flex w-full flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-[#d2d2d7] bg-[#f5f7f8] px-5 py-10 text-center transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60"
         disabled={disabled}
       >
         <span className="inline-flex size-10 items-center justify-center rounded-[0.7rem] bg-white text-primary shadow-sm">

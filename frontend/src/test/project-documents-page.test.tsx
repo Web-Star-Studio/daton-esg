@@ -141,7 +141,9 @@ describe('ProjectDocumentsPage', () => {
     })
 
     expect(
-      screen.getByText(/nenhum documento enviado ainda/i)
+      screen.getByRole('button', {
+        name: /arraste arquivos aqui ou clique para selecionar/i,
+      })
     ).toBeInTheDocument()
     expect(mockFetchProject).toHaveBeenCalledWith('project-1')
     expect(mockFetchProjectDocuments).toHaveBeenCalledWith('project-1')
@@ -157,7 +159,9 @@ describe('ProjectDocumentsPage', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/nenhum documento enviado ainda/i)
+        screen.getByRole('button', {
+          name: /arraste arquivos aqui ou clique para selecionar/i,
+        })
       ).toBeInTheDocument()
     })
 
@@ -186,6 +190,7 @@ describe('ProjectDocumentsPage', () => {
       parsed_payload: null,
       parsing_error: null,
       esg_category: null,
+      classification_confidence: null,
       created_at: '2026-04-06T00:00:00Z',
     }
 
@@ -211,7 +216,9 @@ describe('ProjectDocumentsPage', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/nenhum documento enviado ainda/i)
+        screen.getByRole('button', {
+          name: /arraste arquivos aqui ou clique para selecionar/i,
+        })
       ).toBeInTheDocument()
     })
 
@@ -260,6 +267,7 @@ describe('ProjectDocumentsPage', () => {
         parsed_payload: null,
         parsing_error: null,
         esg_category: null,
+        classification_confidence: null,
         created_at: '2026-04-06T00:00:00Z',
       },
     ])
@@ -301,6 +309,7 @@ describe('ProjectDocumentsPage', () => {
           parsed_payload: null,
           parsing_error: null,
           esg_category: null,
+          classification_confidence: null,
           created_at: '2026-04-06T00:00:00Z',
         },
       ])
@@ -317,6 +326,7 @@ describe('ProjectDocumentsPage', () => {
           parsed_payload: { provider: 'local' },
           parsing_error: null,
           esg_category: null,
+          classification_confidence: null,
           created_at: '2026-04-06T00:00:00Z',
         },
       ])
@@ -353,6 +363,7 @@ describe('ProjectDocumentsPage', () => {
           parsed_payload: null,
           parsing_error: null,
           esg_category: null,
+          classification_confidence: null,
           created_at: '2026-04-06T00:00:00Z',
         },
       ])
@@ -386,6 +397,7 @@ describe('ProjectDocumentsPage', () => {
         parsed_payload: null,
         parsing_error: 'Falha ao processar o PDF.',
         esg_category: null,
+        classification_confidence: null,
         created_at: '2026-04-06T00:00:00Z',
       },
     ])
@@ -393,11 +405,7 @@ describe('ProjectDocumentsPage', () => {
     renderPage()
 
     expect(await screen.findByText('inventario.pdf')).toBeInTheDocument()
-    expect(
-      screen.getByText(
-        'Não foi possível processar este documento. Tente novamente ou contate o suporte.'
-      )
-    ).toBeInTheDocument()
+    expect(screen.getByText('Erro no processamento')).toBeInTheDocument()
     expect(
       screen.queryByText('Falha ao processar o PDF.')
     ).not.toBeInTheDocument()

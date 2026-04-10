@@ -7,7 +7,11 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-from app.models.enums import DocumentFileType, DocumentParsingStatus
+from app.models.enums import (
+    ClassificationConfidence,
+    DocumentFileType,
+    DocumentParsingStatus,
+)
 
 
 class Document(Base):
@@ -46,6 +50,14 @@ class Document(Base):
     parsed_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     parsing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     esg_category: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    classification_confidence: Mapped[ClassificationConfidence | None] = mapped_column(
+        Enum(
+            ClassificationConfidence,
+            name="classification_confidence",
+            values_callable=lambda enum: [member.value for member in enum],
+        ),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -53,3 +65,8 @@ class Document(Base):
     )
 
     project = relationship("Project", back_populates="documents")
+    extractions = relationship(
+        "DocumentExtraction",
+        back_populates="document",
+        cascade="all, delete-orphan",
+    )

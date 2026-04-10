@@ -8,6 +8,7 @@ from sqlalchemy import select
 from app.core.database import SessionLocal
 from app.models import Document
 from app.models.enums import DocumentFileType, DocumentParsingStatus
+from app.services.data_extraction_service import rebuild_document_extractions
 from app.services.parsing import ParsedDocumentResult
 from app.services.parsing.docx_parser import parse_docx_document
 from app.services.parsing.excel_parser import (
@@ -93,12 +94,14 @@ async def run_document_parsing(
                 document.parsing_status = DocumentParsingStatus.PROCESSING
                 document.parsing_error = None
 
+            doc_id = str(document.id)
+
             try:
                 logger.info(
                     "document_parsing.started",
                     extra={
                         "attempt": attempt,
-                        "document_id": str(document.id),
+                        "document_id": doc_id,
                         "file_type": document.file_type.value,
                     },
                 )
@@ -110,12 +113,34 @@ async def run_document_parsing(
                 document.extracted_text = parsed_result.extracted_text or None
                 document.parsed_payload = parsed_result.parsed_payload
                 document.parsing_error = None
+                await session.commit()
+
+                try:
+                    await rebuild_document_extractions(
+                        session,
+                        document=document,
+                        parsed_result=parsed_result,
+                    )
+                    await session.commit()
+                except Exception as cls_exc:
+                    await session.rollback()
+                    await session.refresh(document)
+                    logger.warning(
+                        "document_parsing.classification_failed",
+                        extra={
+                            "document_id": doc_id,
+                            "error": str(cls_exc),
+                        },
+                    )
+                    document.parsing_error = f"Classification failed: {cls_exc}"
+                    await session.commit()
+
                 document.parsing_status = DocumentParsingStatus.COMPLETED
                 await session.commit()
 
                 logger.info(
                     "document_parsing.completed",
-                    extra={"document_id": str(document.id)},
+                    extra={"document_id": doc_id},
                 )
                 return
             except Exception as exc:
@@ -124,10 +149,11 @@ async def run_document_parsing(
                     "document_parsing.failed_attempt",
                     extra={
                         "attempt": attempt,
-                        "document_id": str(document.id),
+                        "document_id": doc_id,
                     },
                 )
                 if attempt < MAX_PARSE_ATTEMPTS:
+                    await session.refresh(document)
                     document.parsing_status = DocumentParsingStatus.PENDING
                     document.extracted_text = None
                     document.parsed_payload = None
@@ -135,6 +161,7 @@ async def run_document_parsing(
                     await session.commit()
                     continue
 
+                await session.refresh(document)
                 document.parsing_status = DocumentParsingStatus.FAILED
                 document.extracted_text = None
                 document.parsed_payload = None
@@ -142,6 +169,9 @@ async def run_document_parsing(
                 await session.commit()
                 logger.error(
                     "document_parsing.failed",
-                    extra={"document_id": str(document.id), "error": str(exc)},
+                    extra={
+                        "document_id": doc_id,
+                        "error": str(exc),
+                    },
                 )
                 return

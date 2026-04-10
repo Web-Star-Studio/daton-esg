@@ -1,0 +1,72 @@
+databases:
+  - name: daton-esg-db
+    plan: starter
+    databaseName: daton_esg
+    user: daton
+    postgresMajorVersion: "16"
+
+services:
+  - type: web
+    name: daton-esg-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: daton-esg-db
+          property: connectionString
+      - key: ENVIRONMENT
+        value: production
+      - key: AWS_REGION
+        value: us-east-1
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_ENDPOINT_URL
+        value: ""
+      - key: S3_BUCKET_NAME
+        sync: false
+      - key: AWS_COGNITO_REGION
+        value: sa-east-1
+      - key: AWS_COGNITO_USER_POOL_ID
+        sync: false
+      - key: AWS_COGNITO_APP_CLIENT_ID
+        sync: false
+      - key: DOCUMENT_PARSING_PDF_PROVIDER
+        value: textract
+      - key: AWS_TEXTRACT_REGION
+        value: us-east-1
+      - key: ANTHROPIC_API_KEY
+        sync: false
+    startCommand: bash render-start.sh
+
+  - type: web
+    name: daton-esg-frontend
+    runtime: static
+    buildCommand: cd frontend && corepack enable && pnpm install --frozen-lockfile && pnpm build
+    staticPublishPath: ./frontend/dist
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://daton-esg-api.onrender.com/api/*
+      - type: rewrite
+        source: /health
+        destination: https://daton-esg-api.onrender.com/health
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_AWS_COGNITO_REGION
+        value: sa-east-1
+      - key: VITE_AWS_COGNITO_USER_POOL_ID
+        sync: false
+      - key: VITE_AWS_COGNITO_APP_CLIENT_ID
+        sync: false

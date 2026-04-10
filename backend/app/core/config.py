@@ -3,7 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
-from pydantic import field_validator, model_validator
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     s3_bucket_name: str = "worton-esg-development"
     aws_textract_region: str | None = None
     document_parsing_pdf_provider: str = "auto"
+    anthropic_api_key: SecretStr | None = None
+    classification_model: str = "claude-sonnet-4-6"
+    classification_temperature: float = 0.0
     aws_cognito_region: str = "us-east-1"
     aws_cognito_user_pool_id: str = "us-east-1_example123"
     aws_cognito_app_client_id: str = "exampleclientid1234567890"
@@ -113,6 +116,13 @@ class Settings(BaseSettings):
             or os.getenv("DOCKER_CONTAINER") is not None
             or os.getenv("PODMAN_CONTAINER") is not None
         )
+
+    @field_validator("classification_temperature", mode="after")
+    @classmethod
+    def validate_classification_temperature(cls, value: float) -> float:
+        if not 0.0 <= value <= 1.0:
+            raise ValueError("classification_temperature must be between 0.0 and 1.0")
+        return value
 
     @field_validator("document_parsing_pdf_provider", mode="after")
     @classmethod

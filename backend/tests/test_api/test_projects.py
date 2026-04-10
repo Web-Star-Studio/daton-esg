@@ -210,7 +210,7 @@ def test_patch_project_updates_project(monkeypatch, projects_app) -> None:
         assert _session is session
         assert project.org_name == "Acme Inc."
         assert payload.org_name == "Acme Renovada"
-        assert payload.status == ProjectStatus.REVIEWING
+        assert payload.status == ProjectStatus.ANALYZING
         updated = make_project(user)
         updated.id = project.id
         updated.org_name = payload.org_name
@@ -229,12 +229,12 @@ def test_patch_project_updates_project(monkeypatch, projects_app) -> None:
     with TestClient(app) as client:
         response = client.patch(
             f"/api/v1/projects/{project.id}",
-            json={"org_name": "Acme Renovada", "status": "reviewing"},
+            json={"org_name": "Acme Renovada", "status": "analyzing"},
         )
 
     assert response.status_code == 200
     assert response.json()["org_name"] == "Acme Renovada"
-    assert response.json()["status"] == "reviewing"
+    assert response.json()["status"] == "analyzing"
 
 
 def test_delete_project_archives_project(monkeypatch, projects_app) -> None:

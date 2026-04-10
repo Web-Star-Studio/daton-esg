@@ -41,8 +41,8 @@ class Project(Base):
             values_callable=lambda enum: [member.value for member in enum],
         ),
         nullable=False,
-        default=ProjectStatus.COLLECTING,
-        server_default=text("'collecting'::project_status"),
+        default=ProjectStatus.PLANNING,
+        server_default=text("'planning'::project_status"),
     )
     material_topics: Mapped[dict[str, Any] | list[Any] | None] = mapped_column(
         JSONB, nullable=True
@@ -65,6 +65,11 @@ class Project(Base):
     user = relationship("User", back_populates="projects")
     documents = relationship(
         "Document", back_populates="project", cascade="all, delete-orphan"
+    )
+    document_extractions = relationship(
+        "DocumentExtraction",
+        back_populates="project",
+        cascade="all, delete-orphan",
     )
     reports = relationship(
         "Report", back_populates="project", cascade="all, delete-orphan"
