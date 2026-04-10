@@ -25,12 +25,8 @@ const DEFAULT_ERROR_MESSAGE =
   'Não foi possível carregar os dados extraídos do projeto.'
 
 export function ProjectDataPage() {
-  const {
-    currentProjectId,
-    isLoadingWorkspace,
-    setProject,
-    workspaceError,
-  } = useProjectWorkspace()
+  const { currentProjectId, isLoadingWorkspace, setProject, workspaceError } =
+    useProjectWorkspace()
   const [documents, setDocuments] = useState<ProjectDocument[]>([])
   const [extractions, setExtractions] = useState<DocumentExtraction[]>([])
   const [drafts, setDrafts] = useState<Record<string, ExtractionDraft>>({})
