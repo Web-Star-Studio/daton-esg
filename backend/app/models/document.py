@@ -1,8 +1,9 @@
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, String, Text, func, text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -42,6 +43,8 @@ class Document(Base):
         server_default=text("'pending'::document_parsing_status"),
     )
     extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    parsed_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    parsing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     esg_category: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

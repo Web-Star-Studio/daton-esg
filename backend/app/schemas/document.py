@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -30,6 +31,8 @@ class DocumentResponse(BaseModel):
     file_size_bytes: int | None
     parsing_status: DocumentParsingStatus
     extracted_text: str | None
+    parsed_payload: dict[str, Any] | None
+    parsing_error: str | None
     esg_category: str | None
     created_at: datetime
 
