@@ -108,9 +108,7 @@ async def run_document_parsing(
                     storage_service=storage_service,
                 )
 
-                document.extracted_text = (
-                    parsed_result.extracted_text or None
-                )
+                document.extracted_text = parsed_result.extracted_text or None
                 document.parsed_payload = parsed_result.parsed_payload
                 document.parsing_error = None
                 await session.commit()
@@ -131,14 +129,10 @@ async def run_document_parsing(
                             "error": str(cls_exc),
                         },
                     )
-                    document.parsing_error = (
-                        f"Classification failed: {cls_exc}"
-                    )
+                    document.parsing_error = f"Classification failed: {cls_exc}"
                     await session.commit()
 
-                document.parsing_status = (
-                    DocumentParsingStatus.COMPLETED
-                )
+                document.parsing_status = DocumentParsingStatus.COMPLETED
                 await session.commit()
 
                 logger.info(
@@ -156,9 +150,7 @@ async def run_document_parsing(
                     },
                 )
                 if attempt < MAX_PARSE_ATTEMPTS:
-                    document.parsing_status = (
-                        DocumentParsingStatus.PENDING
-                    )
+                    document.parsing_status = DocumentParsingStatus.PENDING
                     document.extracted_text = None
                     document.parsed_payload = None
                     document.parsing_error = None

@@ -47,9 +47,7 @@ def _row_to_snippet(
         pairs = []
         for index, cell in enumerate(row):
             header_value = (
-                _normalize_string(header[index])
-                if index < len(header)
-                else None
+                _normalize_string(header[index]) if index < len(header) else None
             )
             cell_value = _normalize_string(cell)
             if not cell_value:
@@ -291,9 +289,7 @@ async def rebuild_document_extractions(
     await session.execute(
         delete(DocumentExtraction).where(
             DocumentExtraction.document_id == document.id,
-            DocumentExtraction.id.notin_(
-                [e.id for e in extractions]
-            ),
+            DocumentExtraction.id.notin_([e.id for e in extractions]),
         )
     )
     classified_by_id = {result.extraction_id: result for result in classified}

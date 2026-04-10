@@ -138,9 +138,7 @@ async def _call_anthropic(prompt: str, settings: Settings) -> str:
     except anthropic.APIConnectionError as e:
         raise RuntimeError(f"Could not connect to Anthropic API: {e}")
 
-    text_blocks = [
-        block.text for block in message.content if block.type == "text"
-    ]
+    text_blocks = [block.text for block in message.content if block.type == "text"]
     if not text_blocks:
         raise ValueError("Anthropic response did not contain a text block")
 
