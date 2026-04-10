@@ -144,7 +144,9 @@ export function ProjectDocumentsPage() {
     let active = true
 
     const intervalId = window.setInterval(() => {
-      void refreshDocuments(currentProjectId, active)
+      void refreshDocuments(currentProjectId, active).catch((error) => {
+        console.error('Failed to refresh project documents from polling', error)
+      })
     }, DOCUMENT_POLLING_INTERVAL_MS)
 
     return () => {
@@ -162,7 +164,6 @@ export function ProjectDocumentsPage() {
       setDocuments(nextDocuments)
     } catch (error) {
       console.error('Failed to refresh project documents', error)
-      throw new Error('Falha ao atualizar a lista de documentos do projeto.')
     }
   }
 

@@ -121,9 +121,7 @@ class Settings(BaseSettings):
         allowed_values = {"auto", "textract", "local"}
         if normalized not in allowed_values:
             allowed = ", ".join(sorted(allowed_values))
-            raise ValueError(
-                f"document_parsing_pdf_provider must be one of: {allowed}"
-            )
+            raise ValueError(f"document_parsing_pdf_provider must be one of: {allowed}")
         return normalized
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from io import BytesIO
 from typing import Any
 
@@ -28,7 +29,8 @@ def parse_docx_document(file_bytes: bytes) -> ParsedDocumentResult:
 
         style_name = (paragraph.style.name or "").lower()
         if style_name.startswith("heading"):
-            heading_level = style_name.removeprefix("heading").strip() or "1"
+            heading_match = re.search(r"\d+", style_name.removeprefix("heading"))
+            heading_level = heading_match.group(0) if heading_match else "1"
             block_type = "heading"
             blocks.append(
                 {

@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 TEXTRACT_POLL_INTERVAL_SECONDS = 2.0
 TEXTRACT_JOB_TIMEOUT_SECONDS = 120.0
 TEXTRACT_SUCCESS_STATUSES = {"SUCCEEDED", "PARTIAL_SUCCESS"}
+LOCALSTACK_ENDPOINT_MARKERS = ("localstack", "localhost", "127.0.0.1")
 
 
 def _build_textract_client(settings: Settings):
@@ -43,7 +44,9 @@ def should_use_local_pdf_parser(settings: Settings | None = None) -> bool:
         return False
 
     endpoint = (current_settings.aws_endpoint_url or "").lower()
-    return current_settings.environment == "development" or "localstack" in endpoint
+    return current_settings.environment == "development" or any(
+        marker in endpoint for marker in LOCALSTACK_ENDPOINT_MARKERS
+    )
 
 
 def _normalize_cell(cell: Any) -> str | None:

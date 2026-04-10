@@ -62,7 +62,11 @@ class StorageService:
 
     def _get_object_bytes(self, *, key: str) -> bytes:
         response = self._client.get_object(Bucket=self.bucket_name, Key=key)
-        return response["Body"].read()
+        body = response["Body"]
+        try:
+            return body.read()
+        finally:
+            body.close()
 
     async def generate_presigned_upload_url(
         self,

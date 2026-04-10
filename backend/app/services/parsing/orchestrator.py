@@ -14,7 +14,10 @@ from app.services.parsing.excel_parser import (
     parse_csv_document,
     parse_xlsx_document,
 )
-from app.services.parsing.pdf_parser import parse_pdf_document
+from app.services.parsing.pdf_parser import (
+    parse_pdf_document,
+    should_use_local_pdf_parser,
+)
 from app.services.storage_service import StorageService, get_storage_service
 
 logger = logging.getLogger(__name__)
@@ -28,9 +31,16 @@ async def _parse_document_by_type(
     storage_service: StorageService,
 ) -> ParsedDocumentResult:
     if document.file_type == DocumentFileType.PDF:
+        if should_use_local_pdf_parser(storage_service.settings):
+            file_bytes = await storage_service.get_object_bytes(key=document.s3_key)
+            return await parse_pdf_document(
+                file_bytes=file_bytes,
+                settings=storage_service.settings,
+            )
         return await parse_pdf_document(
             bucket_name=storage_service.bucket_name,
             key=document.s3_key,
+            settings=storage_service.settings,
         )
 
     file_bytes = await storage_service.get_object_bytes(key=document.s3_key)
@@ -54,20 +64,29 @@ async def run_document_parsing(
 
     for attempt in range(1, MAX_PARSE_ATTEMPTS + 1):
         async with SessionLocal() as session:
-            result = await session.execute(
-                select(Document).where(Document.id == document_id)
-            )
-            document = result.scalar_one_or_none()
-            if document is None:
-                logger.warning(
-                    "document_parsing.document_missing",
-                    extra={"document_id": str(document_id)},
+            async with session.begin():
+                result = await session.execute(
+                    select(Document)
+                    .where(Document.id == document_id)
+                    .with_for_update()
                 )
-                return
+                document = result.scalar_one_or_none()
+                if document is None:
+                    logger.warning(
+                        "document_parsing.document_missing",
+                        extra={"document_id": str(document_id)},
+                    )
+                    return
 
-            document.parsing_status = DocumentParsingStatus.PROCESSING
-            document.parsing_error = None
-            await session.commit()
+                if document.parsing_status == DocumentParsingStatus.PROCESSING:
+                    logger.info(
+                        "document_parsing.already_processing",
+                        extra={"document_id": str(document.id)},
+                    )
+                    return
+
+                document.parsing_status = DocumentParsingStatus.PROCESSING
+                document.parsing_error = None
 
             try:
                 logger.info(
@@ -103,6 +122,9 @@ async def run_document_parsing(
                     },
                 )
                 if attempt < MAX_PARSE_ATTEMPTS:
+                    document.parsing_status = DocumentParsingStatus.PENDING
+                    document.parsing_error = None
+                    await session.commit()
                     continue
 
                 document.parsing_status = DocumentParsingStatus.FAILED

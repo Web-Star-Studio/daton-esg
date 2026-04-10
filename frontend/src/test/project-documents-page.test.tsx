@@ -333,7 +333,46 @@ describe('ProjectDocumentsPage', () => {
     expect(screen.getByText(/processado/i)).toBeInTheDocument()
   })
 
-  it('renders parsing errors for failed documents', async () => {
+  it('handles polling refresh failures without exposing unhandled rejections', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined)
+
+    mockFetchProjectDocuments
+      .mockResolvedValueOnce([
+        {
+          id: 'doc-1',
+          project_id: 'project-1',
+          filename: 'inventario.pdf',
+          file_type: 'pdf',
+          s3_key: 'uploads/project-1/doc-1/inventario.pdf',
+          file_size_bytes: 2048,
+          parsing_status: 'processing',
+          extracted_text: null,
+          parsed_payload: null,
+          parsing_error: null,
+          esg_category: null,
+          created_at: '2026-04-06T00:00:00Z',
+        },
+      ])
+      .mockRejectedValueOnce(new Error('Falha temporária'))
+
+    renderPage()
+
+    expect(await screen.findByText('inventario.pdf')).toBeInTheDocument()
+
+    await vi.advanceTimersByTimeAsync(3000)
+
+    await waitFor(() => {
+      expect(consoleErrorSpy).toHaveBeenCalled()
+      expect(mockFetchProjectDocuments).toHaveBeenCalledTimes(2)
+    })
+
+    consoleErrorSpy.mockRestore()
+  })
+
+  it('renders a safe parsing error message for failed documents', async () => {
     mockFetchProjectDocuments.mockResolvedValue([
       {
         id: 'doc-1',
@@ -355,9 +394,10 @@ describe('ProjectDocumentsPage', () => {
 
     expect(await screen.findByText('inventario.pdf')).toBeInTheDocument()
     expect(
-      screen.getByText((content) =>
-        content.includes('Falha ao processar o PDF.')
+      screen.getByText(
+        "We couldn't process this document. Please try again or contact support."
       )
     ).toBeInTheDocument()
+    expect(screen.queryByText('Falha ao processar o PDF.')).not.toBeInTheDocument()
   })
 })

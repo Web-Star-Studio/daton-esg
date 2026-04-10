@@ -32,6 +32,9 @@ function getParsingStatusLabel(status: ProjectDocument['parsing_status']) {
   }
 }
 
+const PARSING_FAILURE_MESSAGE =
+  "We couldn't process this document. Please try again or contact support."
+
 export function DocumentList({
   deletingDocumentId,
   documents,
@@ -72,7 +75,7 @@ export function DocumentList({
               {document.parsing_status === 'failed' &&
               document.parsing_error ? (
                 <p className="text-[12px] tracking-[-0.01em] text-[#d01f1f]">
-                  {document.parsing_error}
+                  {PARSING_FAILURE_MESSAGE}
                 </p>
               ) : null}
             </div>

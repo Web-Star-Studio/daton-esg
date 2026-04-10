@@ -28,6 +28,7 @@ from app.services.parsing.pdf_parser import (
     _build_textract_client,
     parse_pdf_document,
 )
+from app.services.storage_service import StorageService
 
 
 class FakeStorage:
@@ -57,12 +58,30 @@ class FakeSession:
     def __init__(self, document: Document | None) -> None:
         self.document = document
         self.commit_count = 0
+        self.statements = []
 
     async def execute(self, _statement):
+        self.statements.append(_statement)
         return FakeExecuteResult(self.document)
 
     async def commit(self) -> None:
         self.commit_count += 1
+
+    def begin(self):
+        return FakeTransaction(self)
+
+
+class FakeTransaction(AbstractAsyncContextManager[None]):
+    def __init__(self, session: FakeSession) -> None:
+        self.session = session
+
+    async def __aenter__(self) -> None:
+        return None
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        if exc_type is None:
+            self.session.commit_count += 1
+        return None
 
 
 class FakeSessionContext(AbstractAsyncContextManager[FakeSession]):
@@ -160,6 +179,21 @@ def test_parse_docx_document_preserves_structure() -> None:
     assert result.parsed_payload["tables"][0]["header"] == ["Indicador", "Valor"]
 
 
+def test_parse_docx_document_defaults_heading_level_for_non_numeric_suffix() -> None:
+    document = DocxDocument()
+    paragraph = document.add_paragraph("Politica de Fornecedores")
+    paragraph.style = document.styles["Heading 1"]
+    paragraph.style.name = "Heading Annex"
+
+    buffer = BytesIO()
+    document.save(buffer)
+
+    result = parse_docx_document(buffer.getvalue())
+
+    assert result.parsed_payload["blocks"][0]["level"] == "1"
+    assert result.extracted_text.startswith("# Politica de Fornecedores")
+
+
 @pytest.mark.asyncio
 async def test_parse_pdf_document_uses_local_provider_when_configured(
     monkeypatch,
@@ -183,6 +217,30 @@ async def test_parse_pdf_document_uses_local_provider_when_configured(
     )
 
     assert result == expected_result
+
+
+def test_should_use_local_pdf_parser_handles_localhost_endpoints() -> None:
+    from app.services.parsing.pdf_parser import should_use_local_pdf_parser
+
+    settings = SimpleNamespace(
+        document_parsing_pdf_provider="auto",
+        aws_endpoint_url="http://localhost:4566",
+        environment="production",
+    )
+
+    assert should_use_local_pdf_parser(settings) is True
+
+
+def test_should_use_local_pdf_parser_handles_loopback_endpoints() -> None:
+    from app.services.parsing.pdf_parser import should_use_local_pdf_parser
+
+    settings = SimpleNamespace(
+        document_parsing_pdf_provider="auto",
+        aws_endpoint_url="http://127.0.0.1:4566",
+        environment="production",
+    )
+
+    assert should_use_local_pdf_parser(settings) is True
 
 
 def test_build_textract_client_uses_dedicated_textract_region(monkeypatch) -> None:
@@ -356,6 +414,7 @@ async def test_run_document_parsing_marks_document_completed(monkeypatch) -> Non
     assert document.parsed_payload is not None
     assert "Energia" in (document.extracted_text or "")
     assert session.commit_count == 2
+    assert session.statements[0]._for_update_arg is not None
 
 
 @pytest.mark.asyncio
@@ -389,6 +448,73 @@ async def test_run_document_parsing_uses_s3_textract_path_for_pdf(monkeypatch) -
 
 
 @pytest.mark.asyncio
+async def test_run_document_parsing_uses_local_pdf_bytes_when_configured(
+    monkeypatch,
+) -> None:
+    project = make_project()
+    document = make_document(project, file_type=DocumentFileType.PDF)
+    session = FakeSession(document)
+    storage = FakeStorage(b"%PDF-1.4")
+
+    async def fake_parse_document(**kwargs):
+        assert kwargs["file_bytes"] == b"%PDF-1.4"
+        assert kwargs["settings"] is storage.settings
+        return ParsedDocumentResult(
+            extracted_text="Texto local",
+            parsed_payload={"provider": "local", "tables": []},
+        )
+
+    storage.settings = SimpleNamespace(document_parsing_pdf_provider="local")
+
+    monkeypatch.setattr(
+        "app.services.parsing.orchestrator.SessionLocal",
+        lambda: FakeSessionContext(session),
+    )
+    monkeypatch.setattr(
+        "app.services.parsing.orchestrator.parse_pdf_document",
+        fake_parse_document,
+    )
+
+    await run_document_parsing(document.id, storage=storage)
+
+    assert storage.keys == [document.s3_key]
+    assert document.parsing_status == DocumentParsingStatus.COMPLETED
+    assert document.extracted_text == "Texto local"
+
+
+@pytest.mark.asyncio
+async def test_run_document_parsing_returns_when_document_is_already_processing(
+    monkeypatch,
+) -> None:
+    project = make_project()
+    document = make_document(project, file_type=DocumentFileType.CSV)
+    document.parsing_status = DocumentParsingStatus.PROCESSING
+    session = FakeSession(document)
+    storage = FakeStorage(b"Indicador,Valor\nEnergia,1500\n")
+    parse_called = False
+
+    async def fake_parse_document(_document: Document, *, storage_service):
+        nonlocal parse_called
+        parse_called = True
+        return ParsedDocumentResult(extracted_text="", parsed_payload={})
+
+    monkeypatch.setattr(
+        "app.services.parsing.orchestrator.SessionLocal",
+        lambda: FakeSessionContext(session),
+    )
+    monkeypatch.setattr(
+        "app.services.parsing.orchestrator._parse_document_by_type",
+        fake_parse_document,
+    )
+
+    await run_document_parsing(document.id, storage=storage)
+
+    assert parse_called is False
+    assert session.commit_count == 1
+    assert session.statements[0]._for_update_arg is not None
+
+
+@pytest.mark.asyncio
 async def test_run_document_parsing_retries_once_then_fails(monkeypatch) -> None:
     project = make_project()
     document = make_document(project, file_type=DocumentFileType.CSV)
@@ -415,3 +541,32 @@ async def test_run_document_parsing_retries_once_then_fails(monkeypatch) -> None
     assert attempts["count"] == 2
     assert document.parsing_status == DocumentParsingStatus.FAILED
     assert document.parsing_error == "falha 2"
+
+
+def test_storage_service_get_object_bytes_closes_streaming_body() -> None:
+    class FakeBody:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def read(self) -> bytes:
+            return b"payload"
+
+        def close(self) -> None:
+            self.closed = True
+
+    class FakeClient:
+        def __init__(self, body: FakeBody) -> None:
+            self.body = body
+
+        def get_object(self, **_kwargs):
+            return {"Body": self.body}
+
+    body = FakeBody()
+    service = StorageService.__new__(StorageService)
+    service.bucket_name = "documents-bucket"
+    service._client = FakeClient(body)
+
+    result = service._get_object_bytes(key="uploads/project/doc.pdf")
+
+    assert result == b"payload"
+    assert body.closed is True
