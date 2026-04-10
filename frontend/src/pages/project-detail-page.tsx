@@ -1,6 +1,4 @@
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import type { PageAction } from '../components/project-shell'
+import { useState } from 'react'
 import { ProjectTimeline } from '../components/project-timeline'
 import { updateProject } from '../services/api-client'
 import {
@@ -9,44 +7,12 @@ import {
 } from '../hooks/use-project-workspace'
 
 export function ProjectDetailPage() {
-  const navigate = useNavigate()
   const { isLoadingWorkspace, project, setProject, workspaceError } =
     useProjectWorkspace()
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
   const [pageError, setPageError] = useState<string | null>(null)
-  const pageActions = useMemo<PageAction[]>(
-    () =>
-      project
-        ? [
-            {
-              icon: 'edit',
-              label: 'Editar',
-              onClick: (): void => {
-                navigate(`/projects/${project.id}/edit`)
-              },
-              variant: 'secondary' as const,
-            },
-            {
-              icon: 'upload_file',
-              label: 'Upload de Documentos',
-              onClick: (): void => {
-                navigate(`/projects/${project.id}/documents`)
-              },
-            },
-            {
-              disabled: true,
-              icon: 'auto_awesome',
-              label: 'Gerar Relatório',
-              onClick: () => undefined,
-            },
-          ]
-        : [],
-    [navigate, project]
-  )
-
   useProjectShellRegistration({
     activeSidebarKey: 'overview',
-    pageActions,
     pageTitle: 'Visão Geral',
   })
 

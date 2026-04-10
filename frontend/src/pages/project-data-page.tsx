@@ -267,35 +267,6 @@ export function ProjectDataPage() {
         </div>
       ) : null}
 
-      <section className="rounded-lg border border-black/6 bg-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="rounded-full bg-[#f5f7f8] px-3 py-1 text-[12px] font-medium text-[#1d1d1f]">
-            Projeto: {project?.org_name ?? 'Projeto atual'}
-          </div>
-          <div className="rounded-full bg-[#f5f7f8] px-3 py-1 text-[12px] font-medium text-[#1d1d1f]">
-            Documentos: {documents.length}
-          </div>
-          <div className="rounded-full bg-[#f5f7f8] px-3 py-1 text-[12px] font-medium text-[#1d1d1f]">
-            Extrações: {extractions.length}
-          </div>
-          <div
-            className={`rounded-full px-3 py-1 text-[12px] font-medium ${
-              hasPendingExtractions || hasIncompleteDocuments
-                ? 'bg-[#fff8e8] text-[#9a6700]'
-                : 'bg-[#e8f5e8] text-[#1a7a1a]'
-            }`}
-          >
-            {hasPendingExtractions || hasIncompleteDocuments
-              ? 'Revisão pendente'
-              : 'Pronto para prosseguir'}
-          </div>
-        </div>
-        <p className="mt-3 text-[13px] tracking-[-0.01em] text-[#86868b]">
-          Revise a categoria ESG e os dados extraídos antes de liberar o projeto
-          para a próxima etapa.
-        </p>
-      </section>
-
       {view.level !== 'categories' ? (
         <nav className="flex items-center gap-2 text-[13px] tracking-[-0.01em]">
           <button
