@@ -78,6 +78,9 @@ class FakeSession:
     async def rollback(self) -> None:
         self.rollback_count += 1
 
+    async def refresh(self, _obj) -> None:
+        pass
+
     def begin(self):
         return FakeTransaction(self)
 
