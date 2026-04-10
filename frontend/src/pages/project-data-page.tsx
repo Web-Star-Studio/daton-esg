@@ -28,7 +28,6 @@ export function ProjectDataPage() {
   const {
     currentProjectId,
     isLoadingWorkspace,
-    project,
     setProject,
     workspaceError,
   } = useProjectWorkspace()
