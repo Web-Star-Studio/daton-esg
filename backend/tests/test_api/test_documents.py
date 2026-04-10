@@ -160,6 +160,58 @@ def test_list_documents_returns_project_documents(monkeypatch, documents_app) ->
     assert response.json()[0]["filename"] == "inventario.pdf"
 
 
+def test_confirm_document_upload_schedules_parsing(monkeypatch, documents_app) -> None:
+    app, session, user = documents_app
+    project = make_project(user)
+    document = make_document(project)
+    scheduled_document_ids: list[str] = []
+
+    async def fake_get_project_for_user(_session, _project_id, _user_id):
+        assert _session is session
+        assert _project_id == project.id
+        assert _user_id == user.id
+        return project
+
+    async def fake_get_document_for_project(_session, _project_id, _document_id):
+        assert _session is session
+        assert _project_id == project.id
+        assert _document_id == document.id
+        return document
+
+    async def fake_confirm_document_upload(_session, **kwargs):
+        assert _session is session
+        assert kwargs["document"] is document
+        return document
+
+    async def fake_run_document_parsing(document_id):
+        scheduled_document_ids.append(str(document_id))
+
+    monkeypatch.setattr(
+        "app.api.documents.get_project_for_user",
+        fake_get_project_for_user,
+    )
+    monkeypatch.setattr(
+        "app.api.documents.get_document_for_project",
+        fake_get_document_for_project,
+    )
+    monkeypatch.setattr(
+        "app.api.documents.confirm_document_upload",
+        fake_confirm_document_upload,
+    )
+    monkeypatch.setattr(
+        "app.api.documents.run_document_parsing",
+        fake_run_document_parsing,
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            f"/api/v1/projects/{project.id}/documents/{document.id}/confirm"
+        )
+
+    assert response.status_code == 200
+    assert scheduled_document_ids == [str(document.id)]
+
+
 def test_delete_document_returns_no_content(monkeypatch, documents_app) -> None:
     app, session, user = documents_app
     project = make_project(user)

@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_session
@@ -20,6 +20,7 @@ from app.services.document_service import (
     list_documents_for_project,
     update_document_esg_category,
 )
+from app.services.parsing.orchestrator import run_document_parsing
 from app.services.project_service import get_project_for_user
 from app.services.storage_service import get_storage_service
 
@@ -55,6 +56,7 @@ async def create_project_document_upload(
 async def confirm_project_document_upload(
     project_id: UUID,
     document_id: UUID,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> DocumentResponse:
@@ -65,6 +67,7 @@ async def confirm_project_document_upload(
         document=document,
         storage=get_storage_service(),
     )
+    background_tasks.add_task(run_document_parsing, confirmed_document.id)
     return DocumentResponse.model_validate(confirmed_document)
 
 

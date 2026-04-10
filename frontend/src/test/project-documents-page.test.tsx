@@ -127,6 +127,7 @@ describe('ProjectDocumentsPage', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.clearAllMocks()
   })
 
@@ -182,6 +183,8 @@ describe('ProjectDocumentsPage', () => {
       file_size_bytes: 2048,
       parsing_status: 'pending' as const,
       extracted_text: null,
+      parsed_payload: null,
+      parsing_error: null,
       esg_category: null,
       created_at: '2026-04-06T00:00:00Z',
     }
@@ -254,6 +257,8 @@ describe('ProjectDocumentsPage', () => {
         file_size_bytes: 2048,
         parsing_status: 'pending',
         extracted_text: null,
+        parsed_payload: null,
+        parsing_error: null,
         esg_category: null,
         created_at: '2026-04-06T00:00:00Z',
       },
@@ -278,5 +283,123 @@ describe('ProjectDocumentsPage', () => {
     await waitFor(() => {
       expect(screen.queryByText('inventario.pdf')).not.toBeInTheDocument()
     })
+  })
+
+  it('polls while there are documents still being processed', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    mockFetchProjectDocuments
+      .mockResolvedValueOnce([
+        {
+          id: 'doc-1',
+          project_id: 'project-1',
+          filename: 'inventario.pdf',
+          file_type: 'pdf',
+          s3_key: 'uploads/project-1/doc-1/inventario.pdf',
+          file_size_bytes: 2048,
+          parsing_status: 'processing',
+          extracted_text: null,
+          parsed_payload: null,
+          parsing_error: null,
+          esg_category: null,
+          created_at: '2026-04-06T00:00:00Z',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'doc-1',
+          project_id: 'project-1',
+          filename: 'inventario.pdf',
+          file_type: 'pdf',
+          s3_key: 'uploads/project-1/doc-1/inventario.pdf',
+          file_size_bytes: 2048,
+          parsing_status: 'completed',
+          extracted_text: 'Texto extraído',
+          parsed_payload: { provider: 'local' },
+          parsing_error: null,
+          esg_category: null,
+          created_at: '2026-04-06T00:00:00Z',
+        },
+      ])
+
+    renderPage()
+
+    expect(await screen.findByText('inventario.pdf')).toBeInTheDocument()
+
+    await vi.advanceTimersByTimeAsync(3000)
+
+    await waitFor(() => {
+      expect(mockFetchProjectDocuments).toHaveBeenCalledTimes(2)
+    })
+    expect(screen.getByText(/processado/i)).toBeInTheDocument()
+  })
+
+  it('handles polling refresh failures without exposing unhandled rejections', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined)
+
+    mockFetchProjectDocuments
+      .mockResolvedValueOnce([
+        {
+          id: 'doc-1',
+          project_id: 'project-1',
+          filename: 'inventario.pdf',
+          file_type: 'pdf',
+          s3_key: 'uploads/project-1/doc-1/inventario.pdf',
+          file_size_bytes: 2048,
+          parsing_status: 'processing',
+          extracted_text: null,
+          parsed_payload: null,
+          parsing_error: null,
+          esg_category: null,
+          created_at: '2026-04-06T00:00:00Z',
+        },
+      ])
+      .mockRejectedValueOnce(new Error('Falha temporária'))
+
+    renderPage()
+
+    expect(await screen.findByText('inventario.pdf')).toBeInTheDocument()
+
+    await vi.advanceTimersByTimeAsync(3000)
+
+    await waitFor(() => {
+      expect(consoleErrorSpy).toHaveBeenCalled()
+      expect(mockFetchProjectDocuments).toHaveBeenCalledTimes(2)
+    })
+
+    consoleErrorSpy.mockRestore()
+  })
+
+  it('renders a safe parsing error message for failed documents', async () => {
+    mockFetchProjectDocuments.mockResolvedValue([
+      {
+        id: 'doc-1',
+        project_id: 'project-1',
+        filename: 'inventario.pdf',
+        file_type: 'pdf',
+        s3_key: 'uploads/project-1/doc-1/inventario.pdf',
+        file_size_bytes: 2048,
+        parsing_status: 'failed',
+        extracted_text: null,
+        parsed_payload: null,
+        parsing_error: 'Falha ao processar o PDF.',
+        esg_category: null,
+        created_at: '2026-04-06T00:00:00Z',
+      },
+    ])
+
+    renderPage()
+
+    expect(await screen.findByText('inventario.pdf')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Não foi possível processar este documento. Tente novamente ou contate o suporte.'
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('Falha ao processar o PDF.')
+    ).not.toBeInTheDocument()
   })
 })

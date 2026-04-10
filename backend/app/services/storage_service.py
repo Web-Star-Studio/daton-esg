@@ -60,6 +60,14 @@ class StorageService:
     def _delete_object(self, *, key: str) -> None:
         self._client.delete_object(Bucket=self.bucket_name, Key=key)
 
+    def _get_object_bytes(self, *, key: str) -> bytes:
+        response = self._client.get_object(Bucket=self.bucket_name, Key=key)
+        body = response["Body"]
+        try:
+            return body.read()
+        finally:
+            body.close()
+
     async def generate_presigned_upload_url(
         self,
         *,
@@ -79,6 +87,9 @@ class StorageService:
 
     async def delete_object(self, *, key: str) -> None:
         await asyncio.to_thread(self._delete_object, key=key)
+
+    async def get_object_bytes(self, *, key: str) -> bytes:
+        return await asyncio.to_thread(self._get_object_bytes, key=key)
 
 
 @cache

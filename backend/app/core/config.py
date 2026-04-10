@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     aws_secret_access_key: str = "test"
     aws_endpoint_url: str = "http://localstack:4566"
     s3_bucket_name: str = "worton-esg-development"
+    aws_textract_region: str | None = None
+    document_parsing_pdf_provider: str = "auto"
     aws_cognito_region: str = "us-east-1"
     aws_cognito_user_pool_id: str = "us-east-1_example123"
     aws_cognito_app_client_id: str = "exampleclientid1234567890"
@@ -35,6 +37,11 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def derive_cognito_urls(self) -> "Settings":
+        self.aws_textract_region = (
+            self.aws_textract_region.strip()
+            if self.aws_textract_region and self.aws_textract_region.strip()
+            else self.aws_region
+        )
         issuer = (
             self.aws_cognito_issuer
             or f"https://cognito-idp.{self.aws_cognito_region}.amazonaws.com/"
@@ -77,6 +84,9 @@ class Settings(BaseSettings):
     @field_validator("aws_endpoint_url", mode="after")
     @classmethod
     def normalize_aws_endpoint_url(cls, value: str) -> str:
+        if not value:
+            return value
+
         if cls.is_container_environment():
             return value
 
@@ -103,6 +113,16 @@ class Settings(BaseSettings):
             or os.getenv("DOCKER_CONTAINER") is not None
             or os.getenv("PODMAN_CONTAINER") is not None
         )
+
+    @field_validator("document_parsing_pdf_provider", mode="after")
+    @classmethod
+    def validate_document_parsing_pdf_provider(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        allowed_values = {"auto", "textract", "local"}
+        if normalized not in allowed_values:
+            allowed = ", ".join(sorted(allowed_values))
+            raise ValueError(f"document_parsing_pdf_provider must be one of: {allowed}")
+        return normalized
 
 
 @lru_cache

@@ -16,6 +16,7 @@ import type { ProjectDocument } from '../types/project'
 
 const MAX_DOCUMENT_SIZE_BYTES = 50 * 1024 * 1024
 const ALLOWED_EXTENSIONS = new Set(['pdf', 'xlsx', 'csv', 'docx'])
+const DOCUMENT_POLLING_INTERVAL_MS = 3000
 
 function getFileExtension(filename: string) {
   const lastDotIndex = filename.lastIndexOf('.')
@@ -47,6 +48,11 @@ export function ProjectDocumentsPage() {
   const [isUploading, setIsUploading] = useState(false)
   const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(
     null
+  )
+  const hasDocumentsProcessing = documents.some(
+    (document) =>
+      document.parsing_status === 'pending' ||
+      document.parsing_status === 'processing'
   )
   const isUploaderDisabled =
     isLoading || isLoadingWorkspace || isUploading || !currentProjectId
@@ -125,16 +131,39 @@ export function ProjectDocumentsPage() {
     }
   }, [currentProjectId])
 
-  async function refreshDocuments(expectedProjectId: string) {
+  useEffect(() => {
+    if (
+      !currentProjectId ||
+      isLoading ||
+      isUploading ||
+      !hasDocumentsProcessing
+    ) {
+      return
+    }
+
+    let active = true
+
+    const intervalId = window.setInterval(() => {
+      void refreshDocuments(currentProjectId, active).catch((error) => {
+        console.error('Failed to refresh project documents from polling', error)
+      })
+    }, DOCUMENT_POLLING_INTERVAL_MS)
+
+    return () => {
+      active = false
+      window.clearInterval(intervalId)
+    }
+  }, [currentProjectId, hasDocumentsProcessing, isLoading, isUploading])
+
+  async function refreshDocuments(expectedProjectId: string, isActive = true) {
     try {
       const nextDocuments = await fetchProjectDocuments(expectedProjectId)
-      if (activeProjectIdRef.current !== expectedProjectId) {
+      if (!isActive || activeProjectIdRef.current !== expectedProjectId) {
         return
       }
       setDocuments(nextDocuments)
     } catch (error) {
       console.error('Failed to refresh project documents', error)
-      throw new Error('Falha ao atualizar a lista de documentos do projeto.')
     }
   }
 

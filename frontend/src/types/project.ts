@@ -43,6 +43,8 @@ export type ProjectDocument = {
   file_size_bytes: number | null
   parsing_status: 'pending' | 'processing' | 'completed' | 'failed'
   extracted_text: string | null
+  parsed_payload: Record<string, unknown> | null
+  parsing_error: string | null
   esg_category: string | null
   created_at: string
 }

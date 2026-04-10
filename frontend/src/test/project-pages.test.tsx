@@ -250,6 +250,8 @@ describe('project pages', () => {
         file_size_bytes: 2048,
         parsing_status: 'pending',
         extracted_text: null,
+        parsed_payload: null,
+        parsing_error: null,
         esg_category: null,
         created_at: '2026-04-06T00:00:00Z',
       },
