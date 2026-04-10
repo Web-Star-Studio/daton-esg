@@ -338,46 +338,51 @@ export function ProjectDataPage() {
     )
   }, [documents])
 
-  async function handleSaveExtraction(
-    extraction: DocumentExtraction,
-    reviewStatus: 'approved' | 'corrected' | 'ignored'
-  ) {
-    if (!currentProjectId) {
-      return
-    }
+  const handleSaveExtraction = useCallback(
+    async (
+      extraction: DocumentExtraction,
+      reviewStatus: 'approved' | 'corrected' | 'ignored'
+    ) => {
+      if (!currentProjectId) {
+        return
+      }
 
-    const draft = drafts[extraction.id] ?? createDraft(extraction)
-    const correctionPayload = buildCorrectionPayload(extraction, draft)
-    setSavingExtractionId(extraction.id)
-    setPageError(null)
-    setPageMessage(null)
+      const draft = drafts[extraction.id] ?? createDraft(extraction)
+      const correctionPayload = buildCorrectionPayload(extraction, draft)
+      setSavingExtractionId(extraction.id)
+      setPageError(null)
+      setPageMessage(null)
 
-    try {
-      await updateProjectDataExtraction(currentProjectId, extraction.id, {
-        corrected_esg_category: correctionPayload.corrected_esg_category,
-        corrected_period: correctionPayload.corrected_period,
-        corrected_unit: correctionPayload.corrected_unit,
-        corrected_value: correctionPayload.corrected_value,
-        correction_reason:
-          reviewStatus === 'corrected' ? draft.correction_reason || null : null,
-        review_status:
-          reviewStatus === 'approved'
-            ? correctionPayload.hasCorrections
-              ? 'corrected'
-              : 'approved'
-            : reviewStatus,
-      })
-      await loadData(currentProjectId)
-    } catch (error) {
-      setPageError(
-        error instanceof Error
-          ? error.message
-          : 'Não foi possível salvar a revisão.'
-      )
-    } finally {
-      setSavingExtractionId(null)
-    }
-  }
+      try {
+        await updateProjectDataExtraction(currentProjectId, extraction.id, {
+          corrected_esg_category: correctionPayload.corrected_esg_category,
+          corrected_period: correctionPayload.corrected_period,
+          corrected_unit: correctionPayload.corrected_unit,
+          corrected_value: correctionPayload.corrected_value,
+          correction_reason:
+            reviewStatus === 'corrected'
+              ? draft.correction_reason || null
+              : null,
+          review_status:
+            reviewStatus === 'approved'
+              ? correctionPayload.hasCorrections
+                ? 'corrected'
+                : 'approved'
+              : reviewStatus,
+        })
+        await loadData(currentProjectId)
+      } catch (error) {
+        setPageError(
+          error instanceof Error
+            ? error.message
+            : 'Não foi possível salvar a revisão.'
+        )
+      } finally {
+        setSavingExtractionId(null)
+      }
+    },
+    [currentProjectId, drafts, loadData]
+  )
 
   return (
     <div className="space-y-6 px-6 pt-4 pb-6 sm:px-10">

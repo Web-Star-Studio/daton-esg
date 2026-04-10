@@ -113,11 +113,22 @@ def _build_prompt(extractions: list[ClassificationInput]) -> str:
     )
 
 
-async def _call_anthropic(prompt: str, settings: Settings) -> str:
+_client_cache: dict[str, anthropic.AsyncAnthropic] = {}
+
+
+def _get_client(settings: Settings) -> anthropic.AsyncAnthropic:
     if not settings.anthropic_api_key:
         raise RuntimeError("Anthropic API key is required for ESG classification")
 
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    if settings.anthropic_api_key not in _client_cache:
+        _client_cache[settings.anthropic_api_key] = anthropic.AsyncAnthropic(
+            api_key=settings.anthropic_api_key,
+        )
+    return _client_cache[settings.anthropic_api_key]
+
+
+async def _call_anthropic(prompt: str, settings: Settings) -> str:
+    client = _get_client(settings)
 
     try:
         message = await client.messages.create(
@@ -131,12 +142,12 @@ async def _call_anthropic(prompt: str, settings: Settings) -> str:
                 }
             ],
         )
-    except anthropic.AuthenticationError:
-        raise RuntimeError("Invalid Anthropic API key")
-    except anthropic.RateLimitError:
-        raise RuntimeError("Anthropic rate limit exceeded — try again shortly")
+    except anthropic.AuthenticationError as e:
+        raise RuntimeError("Invalid Anthropic API key") from e
+    except anthropic.RateLimitError as e:
+        raise RuntimeError("Anthropic rate limit exceeded — try again shortly") from e
     except anthropic.APIConnectionError as e:
-        raise RuntimeError(f"Could not connect to Anthropic API: {e}")
+        raise RuntimeError(f"Could not connect to Anthropic API: {e}") from e
 
     text_blocks = [block.text for block in message.content if block.type == "text"]
     if not text_blocks:
@@ -145,17 +156,15 @@ async def _call_anthropic(prompt: str, settings: Settings) -> str:
     return "\n".join(text_blocks).strip()
 
 
-async def classify_document_extractions(
-    extractions: list[ClassificationInput],
-    *,
-    settings: Settings | None = None,
-) -> list[ClassificationOutput]:
-    if not extractions:
-        return []
+CLASSIFICATION_BATCH_SIZE = 50
 
-    current_settings = settings or get_settings()
+
+async def _classify_batch(
+    extractions: list[ClassificationInput],
+    settings: Settings,
+) -> list[ClassificationOutput]:
     prompt = _build_prompt(extractions)
-    raw_response = await _call_anthropic(prompt, current_settings)
+    raw_response = await _call_anthropic(prompt, settings)
     parsed_response = _extract_json_payload(raw_response)
     response_by_id = {str(item.get("id")): item for item in parsed_response}
     results: list[ClassificationOutput] = []
@@ -187,10 +196,31 @@ async def classify_document_extractions(
             )
         )
 
+    return results
+
+
+async def classify_document_extractions(
+    extractions: list[ClassificationInput],
+    *,
+    settings: Settings | None = None,
+) -> list[ClassificationOutput]:
+    if not extractions:
+        return []
+
+    current_settings = settings or get_settings()
+    results: list[ClassificationOutput] = []
+
+    for i in range(0, len(extractions), CLASSIFICATION_BATCH_SIZE):
+        batch = extractions[i : i + CLASSIFICATION_BATCH_SIZE]
+        batch_results = await _classify_batch(batch, current_settings)
+        results.extend(batch_results)
+
     logger.info(
         "document_classification.completed",
         extra={
             "extractions": len(results),
+            "batches": (len(extractions) + CLASSIFICATION_BATCH_SIZE - 1)
+            // CLASSIFICATION_BATCH_SIZE,
             "model": current_settings.classification_model,
         },
     )
