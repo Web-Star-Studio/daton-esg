@@ -159,7 +159,7 @@ async def _call_anthropic(prompt: str, settings: Settings) -> str:
     try:
         message = await client.messages.create(
             model=settings.classification_model,
-            max_tokens=2048,
+            max_tokens=8192,
             temperature=settings.classification_temperature,
             messages=[
                 {
