@@ -90,6 +90,15 @@ def _normalize_confidence(value: str | None) -> ClassificationConfidence:
     raise ValueError(f"Unknown confidence value: {value!r}")
 
 
+def _normalize_scalar(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, (str, int, float, bool)):
+        normalized = str(value).strip()
+        return normalized or None
+    raise ValueError(f"Unsupported scalar type: {type(value).__name__}")
+
+
 def _normalize_category(value: str | None) -> str | None:
     if value is None:
         return None
@@ -110,13 +119,15 @@ def _build_prompt(extractions: list[ClassificationInput]) -> str:
     ]
 
     return (
-        "Classifique cada extração em exatamente uma categoria ESG da lista: "
-        f"{', '.join(ESG_CATEGORY_OPTIONS)}. "
+        "Classifique cada extração em uma categoria ESG da lista: "
+        f"{', '.join(ESG_CATEGORY_OPTIONS)}, ou null se não for classificável. "
         "Para cada item, retorne um array JSON com os campos: "
         "id, esg_category, confidence, label, value, unit, period. "
         "Use confidence apenas como high, medium ou low. "
         "Use label curto quando houver um dado identificável. "
         "Quando não houver valor numérico explícito, use null em value/unit/period. "
+        "Se a extração não pertencer a nenhuma categoria ESG, "
+        "use null em esg_category. "
         "Responda com JSON puro, sem markdown.\n\n"
         f"Extrações:\n{json.dumps(extraction_payload, ensure_ascii=False)}"
     )
@@ -202,10 +213,10 @@ async def _classify_batch(
         results.append(
             ClassificationOutput(
                 extraction_id=extraction.extraction_id,
-                label=_normalize_category(item.get("label")),
-                original_value=_normalize_category(item.get("value")),
-                original_unit=_normalize_category(item.get("unit")),
-                original_period=_normalize_category(item.get("period")),
+                label=_normalize_scalar(item.get("label")),
+                original_value=_normalize_scalar(item.get("value")),
+                original_unit=_normalize_scalar(item.get("unit")),
+                original_period=_normalize_scalar(item.get("period")),
                 original_esg_category=category,
                 confidence=_normalize_confidence(item.get("confidence")),
             )
