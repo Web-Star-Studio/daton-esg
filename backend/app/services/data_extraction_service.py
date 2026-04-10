@@ -272,9 +272,6 @@ async def rebuild_document_extractions(
         for extraction in existing_extractions
     }
 
-    await session.execute(
-        delete(DocumentExtraction).where(DocumentExtraction.document_id == document.id)
-    )
     extractions = build_document_extractions(document, parsed_result)
     session.add_all(extractions)
     await session.flush()
@@ -289,6 +286,15 @@ async def rebuild_document_extractions(
             )
             for extraction in extractions
         ]
+    )
+
+    await session.execute(
+        delete(DocumentExtraction).where(
+            DocumentExtraction.document_id == document.id,
+            DocumentExtraction.id.notin_(
+                [e.id for e in extractions]
+            ),
+        )
     )
     classified_by_id = {result.extraction_id: result for result in classified}
 

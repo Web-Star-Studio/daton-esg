@@ -19,6 +19,14 @@ export function ProjectTimeline({
   disabled = false,
   onStatusChange,
 }: ProjectTimelineProps) {
+  if (currentStatus === 'archived') {
+    return (
+      <span className="inline-flex items-center rounded-full bg-[#f2f2f4] px-2.5 py-1 text-[11px] font-medium tracking-[-0.01em] text-[#6e6e73]">
+        Arquivado
+      </span>
+    )
+  }
+
   const currentIndex = STAGES.findIndex((s) => s.value === currentStatus)
 
   return (

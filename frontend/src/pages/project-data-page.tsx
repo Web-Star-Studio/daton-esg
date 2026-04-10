@@ -124,14 +124,20 @@ function buildCorrectionPayload(
   extraction: DocumentExtraction,
   draft: ExtractionDraft
 ) {
-  const hasCategoryCorrection =
-    (draft.corrected_esg_category || null) !== extraction.original_esg_category
-  const hasValueCorrection =
-    (draft.corrected_value || null) !== extraction.original_value
-  const hasUnitCorrection =
-    (draft.corrected_unit || null) !== extraction.original_unit
-  const hasPeriodCorrection =
-    (draft.corrected_period || null) !== extraction.original_period
+  const normCategory = draft.corrected_esg_category || null
+  const normValue = draft.corrected_value || null
+  const normUnit = draft.corrected_unit || null
+  const normPeriod = draft.corrected_period || null
+
+  const origCategory = extraction.original_esg_category ?? null
+  const origValue = extraction.original_value ?? null
+  const origUnit = extraction.original_unit ?? null
+  const origPeriod = extraction.original_period ?? null
+
+  const hasCategoryCorrection = normCategory !== origCategory
+  const hasValueCorrection = normValue !== origValue
+  const hasUnitCorrection = normUnit !== origUnit
+  const hasPeriodCorrection = normPeriod !== origPeriod
 
   const hasCorrections =
     hasCategoryCorrection ||
@@ -140,14 +146,10 @@ function buildCorrectionPayload(
     hasPeriodCorrection
 
   return {
-    corrected_esg_category: hasCategoryCorrection
-      ? draft.corrected_esg_category || null
-      : null,
-    corrected_period: hasPeriodCorrection
-      ? draft.corrected_period || null
-      : null,
-    corrected_unit: hasUnitCorrection ? draft.corrected_unit || null : null,
-    corrected_value: hasValueCorrection ? draft.corrected_value || null : null,
+    corrected_esg_category: hasCategoryCorrection ? normCategory : null,
+    corrected_period: hasPeriodCorrection ? normPeriod : null,
+    corrected_unit: hasUnitCorrection ? normUnit : null,
+    corrected_value: hasValueCorrection ? normValue : null,
     hasCorrections,
   }
 }

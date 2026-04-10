@@ -117,6 +117,15 @@ class Settings(BaseSettings):
             or os.getenv("PODMAN_CONTAINER") is not None
         )
 
+    @field_validator("classification_temperature", mode="after")
+    @classmethod
+    def validate_classification_temperature(cls, value: float) -> float:
+        if not 0.0 <= value <= 1.0:
+            raise ValueError(
+                "classification_temperature must be between 0.0 and 1.0"
+            )
+        return value
+
     @field_validator("document_parsing_pdf_provider", mode="after")
     @classmethod
     def validate_document_parsing_pdf_provider(cls, value: str) -> str:

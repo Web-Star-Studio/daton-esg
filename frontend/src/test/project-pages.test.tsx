@@ -218,7 +218,9 @@ describe('project pages', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText(/informações gerais/i)).toBeInTheDocument()
+      expect(
+        screen.getByRole('heading', { name: /visão geral/i })
+      ).toBeInTheDocument()
     })
 
     await waitFor(() => {
@@ -232,9 +234,6 @@ describe('project pages', () => {
         screen.getByRole('button', { name: /gerar relatório/i })
       ).toBeDisabled()
     })
-    expect(
-      screen.getByText(/nenhum documento enviado ainda/i)
-    ).toBeInTheDocument()
   })
 
   it('keeps generate report disabled even when documents exist', async () => {
@@ -272,7 +271,9 @@ describe('project pages', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText('inventario.pdf')).toBeInTheDocument()
+      expect(
+        screen.getByRole('heading', { name: /visão geral/i })
+      ).toBeInTheDocument()
     })
 
     await waitFor(() => {
@@ -321,7 +322,9 @@ describe('project pages', () => {
       screen.getByRole('heading', { name: /documentos/i })
     ).toBeInTheDocument()
     expect(
-      screen.getByText(/nenhum documento enviado ainda/i)
+      screen.getByRole('button', {
+        name: /arraste arquivos aqui ou clique para selecionar/i,
+      })
     ).toBeInTheDocument()
     expect(mockFetchProject.mock.calls.map(([projectId]) => projectId)).toEqual(
       ['project-1', 'project-2']

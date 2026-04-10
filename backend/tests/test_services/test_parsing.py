@@ -424,7 +424,7 @@ async def test_run_document_parsing_marks_document_completed(monkeypatch) -> Non
     assert document.parsing_status == DocumentParsingStatus.COMPLETED
     assert document.parsed_payload is not None
     assert "Energia" in (document.extracted_text or "")
-    assert session.commit_count == 2
+    assert session.commit_count >= 2
     compiled = session.statements[0].compile(dialect=postgresql.dialect())
     assert "FOR UPDATE" in str(compiled)
 

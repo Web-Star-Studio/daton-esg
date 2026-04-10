@@ -141,7 +141,9 @@ describe('ProjectDocumentsPage', () => {
     })
 
     expect(
-      screen.getByText(/nenhum documento enviado ainda/i)
+      screen.getByRole('button', {
+        name: /arraste arquivos aqui ou clique para selecionar/i,
+      })
     ).toBeInTheDocument()
     expect(mockFetchProject).toHaveBeenCalledWith('project-1')
     expect(mockFetchProjectDocuments).toHaveBeenCalledWith('project-1')
@@ -157,7 +159,9 @@ describe('ProjectDocumentsPage', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/nenhum documento enviado ainda/i)
+        screen.getByRole('button', {
+          name: /arraste arquivos aqui ou clique para selecionar/i,
+        })
       ).toBeInTheDocument()
     })
 
@@ -212,7 +216,9 @@ describe('ProjectDocumentsPage', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/nenhum documento enviado ainda/i)
+        screen.getByRole('button', {
+          name: /arraste arquivos aqui ou clique para selecionar/i,
+        })
       ).toBeInTheDocument()
     })
 
@@ -399,11 +405,7 @@ describe('ProjectDocumentsPage', () => {
     renderPage()
 
     expect(await screen.findByText('inventario.pdf')).toBeInTheDocument()
-    expect(
-      screen.getByText(
-        'Não foi possível processar este documento. Tente novamente ou contate o suporte.'
-      )
-    ).toBeInTheDocument()
+    expect(screen.getByText('Erro no processamento')).toBeInTheDocument()
     expect(
       screen.queryByText('Falha ao processar o PDF.')
     ).not.toBeInTheDocument()

@@ -108,15 +108,37 @@ async def run_document_parsing(
                     storage_service=storage_service,
                 )
 
-                document.extracted_text = parsed_result.extracted_text or None
+                document.extracted_text = (
+                    parsed_result.extracted_text or None
+                )
                 document.parsed_payload = parsed_result.parsed_payload
                 document.parsing_error = None
-                await rebuild_document_extractions(
-                    session,
-                    document=document,
-                    parsed_result=parsed_result,
+                await session.commit()
+
+                try:
+                    await rebuild_document_extractions(
+                        session,
+                        document=document,
+                        parsed_result=parsed_result,
+                    )
+                    await session.commit()
+                except Exception as cls_exc:
+                    await session.rollback()
+                    logger.warning(
+                        "document_parsing.classification_failed",
+                        extra={
+                            "document_id": str(document.id),
+                            "error": str(cls_exc),
+                        },
+                    )
+                    document.parsing_error = (
+                        f"Classification failed: {cls_exc}"
+                    )
+                    await session.commit()
+
+                document.parsing_status = (
+                    DocumentParsingStatus.COMPLETED
                 )
-                document.parsing_status = DocumentParsingStatus.COMPLETED
                 await session.commit()
 
                 logger.info(
@@ -134,7 +156,9 @@ async def run_document_parsing(
                     },
                 )
                 if attempt < MAX_PARSE_ATTEMPTS:
-                    document.parsing_status = DocumentParsingStatus.PENDING
+                    document.parsing_status = (
+                        DocumentParsingStatus.PENDING
+                    )
                     document.extracted_text = None
                     document.parsed_payload = None
                     document.parsing_error = None
@@ -148,6 +172,9 @@ async def run_document_parsing(
                 await session.commit()
                 logger.error(
                     "document_parsing.failed",
-                    extra={"document_id": str(document.id), "error": str(exc)},
+                    extra={
+                        "document_id": str(document.id),
+                        "error": str(exc),
+                    },
                 )
                 return

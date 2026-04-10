@@ -221,6 +221,12 @@ async def update_document_esg_category(
             extraction.corrected_esg_category = normalized_category
             extraction.review_status = ExtractionReviewStatus.CORRECTED
         recalculate_document_classification(document, extractions)
+    elif extractions and normalized_category is None:
+        for extraction in extractions:
+            extraction.corrected_esg_category = None
+            if extraction.review_status == ExtractionReviewStatus.CORRECTED:
+                extraction.review_status = ExtractionReviewStatus.PENDING
+        recalculate_document_classification(document, extractions)
     else:
         document.esg_category = normalized_category or None
         if normalized_category is None:

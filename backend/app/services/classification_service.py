@@ -171,7 +171,7 @@ async def classify_document_extractions(
             )
 
         category = _normalize_category(item.get("esg_category"))
-        if category not in ESG_CATEGORY_OPTIONS:
+        if category is not None and category not in ESG_CATEGORY_OPTIONS:
             raise ValueError(
                 "Anthropic classification returned unsupported "
                 f"category for {extraction.extraction_id}"
