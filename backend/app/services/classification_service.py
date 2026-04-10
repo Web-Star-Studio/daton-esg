@@ -69,16 +69,25 @@ def _extract_json_payload(payload: str) -> list[dict[str, Any]]:
     if not isinstance(parsed, list):
         raise ValueError("Anthropic classification response must be a JSON array")
 
+    if any(not isinstance(item, dict) for item in parsed):
+        raise ValueError(
+            "Anthropic classification response must be a JSON array of objects"
+        )
+
     return parsed
 
 
 def _normalize_confidence(value: str | None) -> ClassificationConfidence:
     normalized = (value or "").strip().lower()
+    if not normalized:
+        return ClassificationConfidence.MEDIUM
     if normalized == ClassificationConfidence.HIGH.value:
         return ClassificationConfidence.HIGH
+    if normalized == ClassificationConfidence.MEDIUM.value:
+        return ClassificationConfidence.MEDIUM
     if normalized == ClassificationConfidence.LOW.value:
         return ClassificationConfidence.LOW
-    return ClassificationConfidence.MEDIUM
+    raise ValueError(f"Unknown confidence value: {value!r}")
 
 
 def _normalize_category(value: str | None) -> str | None:
@@ -113,18 +122,24 @@ def _build_prompt(extractions: list[ClassificationInput]) -> str:
     )
 
 
-_client_cache: dict[str, anthropic.AsyncAnthropic] = {}
+_client: anthropic.AsyncAnthropic | None = None
+_client_key_hash: int | None = None
 
 
 def _get_client(settings: Settings) -> anthropic.AsyncAnthropic:
+    global _client, _client_key_hash
+
     if not settings.anthropic_api_key:
         raise RuntimeError("Anthropic API key is required for ESG classification")
 
-    if settings.anthropic_api_key not in _client_cache:
-        _client_cache[settings.anthropic_api_key] = anthropic.AsyncAnthropic(
-            api_key=settings.anthropic_api_key,
-        )
-    return _client_cache[settings.anthropic_api_key]
+    key = settings.anthropic_api_key.get_secret_value()
+    key_hash = hash(key)
+
+    if _client is None or _client_key_hash != key_hash:
+        _client = anthropic.AsyncAnthropic(api_key=key)
+        _client_key_hash = key_hash
+
+    return _client
 
 
 async def _call_anthropic(prompt: str, settings: Settings) -> str:

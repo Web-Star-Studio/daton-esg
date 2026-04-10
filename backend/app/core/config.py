@@ -3,7 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
-from pydantic import field_validator, model_validator
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     s3_bucket_name: str = "worton-esg-development"
     aws_textract_region: str | None = None
     document_parsing_pdf_provider: str = "auto"
-    anthropic_api_key: str | None = None
+    anthropic_api_key: SecretStr | None = None
     classification_model: str = "claude-sonnet-4-6-20250514"
     classification_temperature: float = 0.0
     aws_cognito_region: str = "us-east-1"

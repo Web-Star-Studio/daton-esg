@@ -208,7 +208,8 @@ async def update_document_esg_category(
     document: Document,
     esg_category: str | None,
 ) -> Document:
-    normalized_category = esg_category.strip() if esg_category else None
+    stripped = esg_category.strip() if esg_category else ""
+    normalized_category = stripped or None
     result = await session.execute(
         select(DocumentExtraction).where(DocumentExtraction.document_id == document.id)
     )
