@@ -166,13 +166,15 @@ async def classify_document_extractions(
         item = response_by_id.get(extraction.extraction_id)
         if item is None:
             raise ValueError(
-                f"Anthropic classification response missing extraction {extraction.extraction_id}"
+                "Anthropic classification response missing "
+                f"extraction {extraction.extraction_id}"
             )
 
         category = _normalize_category(item.get("esg_category"))
         if category not in ESG_CATEGORY_OPTIONS:
             raise ValueError(
-                f"Anthropic classification returned unsupported category for {extraction.extraction_id}"
+                "Anthropic classification returned unsupported "
+                f"category for {extraction.extraction_id}"
             )
 
         results.append(
@@ -189,6 +191,9 @@ async def classify_document_extractions(
 
     logger.info(
         "document_classification.completed",
-        extra={"extractions": len(results), "model": current_settings.classification_model},
+        extra={
+            "extractions": len(results),
+            "model": current_settings.classification_model,
+        },
     )
     return results

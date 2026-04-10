@@ -10,13 +10,8 @@ import {
 
 export function ProjectDetailPage() {
   const navigate = useNavigate()
-  const {
-    currentProjectId,
-    isLoadingWorkspace,
-    project,
-    setProject,
-    workspaceError,
-  } = useProjectWorkspace()
+  const { isLoadingWorkspace, project, setProject, workspaceError } =
+    useProjectWorkspace()
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
   const [pageError, setPageError] = useState<string | null>(null)
   const pageActions = useMemo<PageAction[]>(
@@ -100,7 +95,9 @@ export function ProjectDetailPage() {
                 {project.org_sector ?? 'Não informado'}
               </span>
             </div>
-            <span className="text-[#d2d2d7]" aria-hidden="true">|</span>
+            <span className="text-[#d2d2d7]" aria-hidden="true">
+              |
+            </span>
             <div className="flex items-center gap-2">
               <span className="text-[12px] font-medium uppercase tracking-[0.5px] text-[#86868b]">
                 Ano-base

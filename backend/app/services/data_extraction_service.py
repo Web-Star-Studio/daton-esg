@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from datetime import datetime, timezone
-import json
 from typing import Any
 from uuid import UUID
 
@@ -46,7 +46,11 @@ def _row_to_snippet(
     if header:
         pairs = []
         for index, cell in enumerate(row):
-            header_value = _normalize_string(header[index]) if index < len(header) else None
+            header_value = (
+                _normalize_string(header[index])
+                if index < len(header)
+                else None
+            )
             cell_value = _normalize_string(cell)
             if not cell_value:
                 continue
@@ -57,7 +61,9 @@ def _row_to_snippet(
         if pairs:
             return " | ".join(pairs)
 
-    return " | ".join(cell for cell in (_normalize_string(item) for item in row) if cell)
+    return " | ".join(
+        cell for cell in (_normalize_string(item) for item in row) if cell
+    )
 
 
 def build_document_extractions(
@@ -221,7 +227,11 @@ def recalculate_document_classification(
 
     dominant_category = max(
         category_scores,
-        key=lambda category: (category_scores[category], category_counts[category], category),
+        key=lambda category: (
+            category_scores[category],
+            category_counts[category],
+            category,
+        ),
     )
     document.esg_category = dominant_category
 
@@ -421,7 +431,9 @@ async def update_data_extraction_review(
         document = document_result.scalar_one()
 
     extraction_result = await session.execute(
-        select(DocumentExtraction).where(DocumentExtraction.document_id == extraction.document_id)
+        select(DocumentExtraction).where(
+            DocumentExtraction.document_id == extraction.document_id
+        )
     )
     document_extractions = list(extraction_result.scalars().all())
     recalculate_document_classification(document, document_extractions)
@@ -478,7 +490,11 @@ async def validate_project_classification(
             detail="Envie ao menos um documento antes de validar os dados.",
         )
 
-    if any(document.parsing_status != DocumentParsingStatus.COMPLETED for document in documents):
+    has_unprocessed = any(
+        document.parsing_status != DocumentParsingStatus.COMPLETED
+        for document in documents
+    )
+    if has_unprocessed:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Todos os documentos precisam estar processados antes da validação.",

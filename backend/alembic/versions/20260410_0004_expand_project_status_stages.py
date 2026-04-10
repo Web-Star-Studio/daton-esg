@@ -34,9 +34,18 @@ def upgrade() -> None:
     op.execute("DROP TYPE project_status")
 
     # 2. Remap old values to new ones.
-    op.execute("UPDATE projects SET status = 'preliminary_report' WHERE status = 'generating'")
-    op.execute("UPDATE projects SET status = 'alignment' WHERE status = 'reviewing'")
-    op.execute("UPDATE projects SET status = 'layout' WHERE status = 'finalized'")
+    op.execute(
+        "UPDATE projects SET status = 'preliminary_report'"
+        " WHERE status = 'generating'"
+    )
+    op.execute(
+        "UPDATE projects SET status = 'alignment'"
+        " WHERE status = 'reviewing'"
+    )
+    op.execute(
+        "UPDATE projects SET status = 'layout'"
+        " WHERE status = 'finalized'"
+    )
 
     # 3. Create new enum and cast column back.
     op.execute(
@@ -66,10 +75,22 @@ def downgrade() -> None:
     op.execute("DROP TYPE project_status")
 
     # Remap back.
-    op.execute("UPDATE projects SET status = 'collecting' WHERE status IN ('planning', 'analyzing')")
-    op.execute("UPDATE projects SET status = 'generating' WHERE status IN ('preliminary_report', 'final_report')")
-    op.execute("UPDATE projects SET status = 'reviewing' WHERE status = 'alignment'")
-    op.execute("UPDATE projects SET status = 'finalized' WHERE status = 'layout'")
+    op.execute(
+        "UPDATE projects SET status = 'collecting'"
+        " WHERE status IN ('planning', 'analyzing')"
+    )
+    op.execute(
+        "UPDATE projects SET status = 'generating'"
+        " WHERE status IN ('preliminary_report', 'final_report')"
+    )
+    op.execute(
+        "UPDATE projects SET status = 'reviewing'"
+        " WHERE status = 'alignment'"
+    )
+    op.execute(
+        "UPDATE projects SET status = 'finalized'"
+        " WHERE status = 'layout'"
+    )
 
     op.execute(
         "CREATE TYPE project_status AS ENUM ("

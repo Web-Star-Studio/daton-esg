@@ -44,7 +44,9 @@ class DocumentExtraction(Base):
     original_value: Mapped[str | None] = mapped_column(Text, nullable=True)
     original_unit: Mapped[str | None] = mapped_column(String(64), nullable=True)
     original_period: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    original_esg_category: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    original_esg_category: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
     corrected_value: Mapped[str | None] = mapped_column(Text, nullable=True)
     corrected_unit: Mapped[str | None] = mapped_column(String(64), nullable=True)
     corrected_period: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -97,11 +99,15 @@ class DocumentExtraction(Base):
 
     @property
     def effective_value(self) -> str | None:
-        return self.corrected_value if self.corrected_value is not None else self.original_value
+        if self.corrected_value is not None:
+            return self.corrected_value
+        return self.original_value
 
     @property
     def effective_unit(self) -> str | None:
-        return self.corrected_unit if self.corrected_unit is not None else self.original_unit
+        if self.corrected_unit is not None:
+            return self.corrected_unit
+        return self.original_unit
 
     @property
     def effective_period(self) -> str | None:

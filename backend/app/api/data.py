@@ -50,7 +50,10 @@ async def list_project_data_extractions(
         limit=limit,
         offset=offset,
     )
-    return [DocumentExtractionResponse.model_validate(extraction) for extraction in extractions]
+    return [
+        DocumentExtractionResponse.model_validate(extraction)
+        for extraction in extractions
+    ]
 
 
 @router.patch(

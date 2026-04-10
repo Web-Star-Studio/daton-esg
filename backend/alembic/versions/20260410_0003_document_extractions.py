@@ -122,9 +122,18 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_document_extractions_review_status", table_name="document_extractions")
-    op.drop_index("ix_document_extractions_document_id", table_name="document_extractions")
-    op.drop_index("ix_document_extractions_project_id", table_name="document_extractions")
+    op.drop_index(
+        "ix_document_extractions_review_status",
+        table_name="document_extractions",
+    )
+    op.drop_index(
+        "ix_document_extractions_document_id",
+        table_name="document_extractions",
+    )
+    op.drop_index(
+        "ix_document_extractions_project_id",
+        table_name="document_extractions",
+    )
     op.drop_table("document_extractions")
     op.drop_column("documents", "classification_confidence")
 

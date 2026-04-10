@@ -307,9 +307,12 @@ export async function updateProjectDataExtraction(
 }
 
 export async function rebuildProjectClassification(projectId: string) {
-  const response = await apiFetch(`/api/v1/projects/${projectId}/classification/rebuild`, {
-    method: 'POST',
-  })
+  const response = await apiFetch(
+    `/api/v1/projects/${projectId}/classification/rebuild`,
+    {
+      method: 'POST',
+    }
+  )
 
   if (!response.ok) {
     throw await parseApiError(
@@ -325,9 +328,12 @@ export async function rebuildProjectClassification(projectId: string) {
 }
 
 export async function validateProjectClassification(projectId: string) {
-  const response = await apiFetch(`/api/v1/projects/${projectId}/classification/validate`, {
-    method: 'POST',
-  })
+  const response = await apiFetch(
+    `/api/v1/projects/${projectId}/classification/validate`,
+    {
+      method: 'POST',
+    }
+  )
 
   if (!response.ok) {
     throw await parseApiError(

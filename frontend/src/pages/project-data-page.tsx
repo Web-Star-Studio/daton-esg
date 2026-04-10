@@ -109,14 +109,21 @@ function createDraft(extraction: DocumentExtraction): ExtractionDraft {
   return {
     correction_reason: extraction.correction_reason ?? '',
     corrected_esg_category:
-      extraction.corrected_esg_category ?? extraction.original_esg_category ?? '',
-    corrected_period: extraction.corrected_period ?? extraction.original_period ?? '',
+      extraction.corrected_esg_category ??
+      extraction.original_esg_category ??
+      '',
+    corrected_period:
+      extraction.corrected_period ?? extraction.original_period ?? '',
     corrected_unit: extraction.corrected_unit ?? extraction.original_unit ?? '',
-    corrected_value: extraction.corrected_value ?? extraction.original_value ?? '',
+    corrected_value:
+      extraction.corrected_value ?? extraction.original_value ?? '',
   }
 }
 
-function buildCorrectionPayload(extraction: DocumentExtraction, draft: ExtractionDraft) {
+function buildCorrectionPayload(
+  extraction: DocumentExtraction,
+  draft: ExtractionDraft
+) {
   const hasCategoryCorrection =
     (draft.corrected_esg_category || null) !== extraction.original_esg_category
   const hasValueCorrection =
@@ -136,7 +143,9 @@ function buildCorrectionPayload(extraction: DocumentExtraction, draft: Extractio
     corrected_esg_category: hasCategoryCorrection
       ? draft.corrected_esg_category || null
       : null,
-    corrected_period: hasPeriodCorrection ? draft.corrected_period || null : null,
+    corrected_period: hasPeriodCorrection
+      ? draft.corrected_period || null
+      : null,
     corrected_unit: hasUnitCorrection ? draft.corrected_unit || null : null,
     corrected_value: hasValueCorrection ? draft.corrected_value || null : null,
     hasCorrections,
@@ -159,41 +168,40 @@ export function ProjectDataPage() {
   const [pageMessage, setPageMessage] = useState<string | null>(null)
   const [isRebuilding, setIsRebuilding] = useState(false)
   const [isValidating, setIsValidating] = useState(false)
-  const [savingExtractionId, setSavingExtractionId] = useState<string | null>(null)
-
-  const loadData = useCallback(
-    async (projectId: string) => {
-      setIsLoading(true)
-
-      try {
-        const [documentsResponse, extractionsResponse] = await Promise.all([
-          fetchProjectDocuments(projectId),
-          fetchProjectDataExtractions(projectId),
-        ])
-        setDocuments(documentsResponse)
-        setExtractions(extractionsResponse)
-        setDrafts(
-          Object.fromEntries(
-            extractionsResponse.map((extraction) => [
-              extraction.id,
-              createDraft(extraction),
-            ])
-          )
-        )
-        setPageError(null)
-      } catch (error) {
-        setDocuments([])
-        setExtractions([])
-        setDrafts({})
-        setPageError(
-          error instanceof Error ? error.message : DEFAULT_ERROR_MESSAGE
-        )
-      } finally {
-        setIsLoading(false)
-      }
-    },
-    []
+  const [savingExtractionId, setSavingExtractionId] = useState<string | null>(
+    null
   )
+
+  const loadData = useCallback(async (projectId: string) => {
+    setIsLoading(true)
+
+    try {
+      const [documentsResponse, extractionsResponse] = await Promise.all([
+        fetchProjectDocuments(projectId),
+        fetchProjectDataExtractions(projectId),
+      ])
+      setDocuments(documentsResponse)
+      setExtractions(extractionsResponse)
+      setDrafts(
+        Object.fromEntries(
+          extractionsResponse.map((extraction) => [
+            extraction.id,
+            createDraft(extraction),
+          ])
+        )
+      )
+      setPageError(null)
+    } catch (error) {
+      setDocuments([])
+      setExtractions([])
+      setDrafts({})
+      setPageError(
+        error instanceof Error ? error.message : DEFAULT_ERROR_MESSAGE
+      )
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
     if (!currentProjectId) {
@@ -243,7 +251,8 @@ export function ProjectDataPage() {
             setPageMessage(null)
 
             try {
-              const response = await rebuildProjectClassification(currentProjectId)
+              const response =
+                await rebuildProjectClassification(currentProjectId)
               await loadData(currentProjectId)
               setPageMessage(
                 `${response.documents_processed} documento(s) reclassificado(s).`
@@ -276,9 +285,8 @@ export function ProjectDataPage() {
             setPageMessage(null)
 
             try {
-              const updatedProject = await validateProjectClassification(
-                currentProjectId
-              )
+              const updatedProject =
+                await validateProjectClassification(currentProjectId)
               setProject(updatedProject)
               setPageMessage(
                 'Dados validados. O projeto foi marcado como pronto para a próxima etapa.'
@@ -302,7 +310,6 @@ export function ProjectDataPage() {
       isLoading,
       isLoadingWorkspace,
       isRebuilding,
-      isValidating,
       loadData,
       setProject,
     ]
@@ -464,7 +471,10 @@ export function ProjectDataPage() {
                       </h3>
                       <p className="mt-1 text-[12px] tracking-[-0.01em] text-[#86868b]">
                         {document.file_type.toUpperCase()} • Confiança do
-                        documento: {getDocumentConfidenceLabel(document.classification_confidence)}
+                        documento:{' '}
+                        {getDocumentConfidenceLabel(
+                          document.classification_confidence
+                        )}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -498,14 +508,17 @@ export function ProjectDataPage() {
                                       extraction.confidence
                                     )}`}
                                   >
-                                    Confiança {getConfidenceLabel(extraction.confidence)}
+                                    Confiança{' '}
+                                    {getConfidenceLabel(extraction.confidence)}
                                   </span>
                                   <span
                                     className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${getReviewStatusClasses(
                                       extraction.review_status
                                     )}`}
                                   >
-                                    {getReviewStatusLabel(extraction.review_status)}
+                                    {getReviewStatusLabel(
+                                      extraction.review_status
+                                    )}
                                   </span>
                                 </div>
                                 <p className="max-w-4xl text-[13px] leading-6 tracking-[-0.01em] text-[#1d1d1f]">
@@ -633,7 +646,10 @@ export function ProjectDataPage() {
                                 className="mt-0 px-3 py-1.5 text-[12px]"
                                 disabled={savingExtractionId === extraction.id}
                                 onClick={() => {
-                                  void handleSaveExtraction(extraction, 'ignored')
+                                  void handleSaveExtraction(
+                                    extraction,
+                                    'ignored'
+                                  )
                                 }}
                                 type="button"
                               >
@@ -643,7 +659,10 @@ export function ProjectDataPage() {
                                 className="mt-0 px-3 py-1.5 text-[12px]"
                                 disabled={savingExtractionId === extraction.id}
                                 onClick={() => {
-                                  void handleSaveExtraction(extraction, 'approved')
+                                  void handleSaveExtraction(
+                                    extraction,
+                                    'approved'
+                                  )
                                 }}
                                 type="button"
                               >
