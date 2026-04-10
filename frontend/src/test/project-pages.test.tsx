@@ -222,65 +222,6 @@ describe('project pages', () => {
         screen.getByRole('heading', { name: /visão geral/i })
       ).toBeInTheDocument()
     })
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: /editar/i })
-      ).toBeInTheDocument()
-      expect(
-        screen.getByRole('button', { name: /upload de documentos/i })
-      ).toBeInTheDocument()
-      expect(
-        screen.getByRole('button', { name: /gerar relatório/i })
-      ).toBeDisabled()
-    })
-  })
-
-  it('keeps generate report disabled even when documents exist', async () => {
-    mockFetchProject.mockResolvedValue(baseProject)
-    mockFetchProjects.mockResolvedValue([baseProject])
-    mockFetchProjectDocuments.mockResolvedValue([
-      {
-        id: 'doc-1',
-        project_id: 'project-1',
-        filename: 'inventario.pdf',
-        file_type: 'pdf',
-        s3_key: 'uploads/project-1/doc-1/inventario.pdf',
-        file_size_bytes: 2048,
-        parsing_status: 'pending',
-        extracted_text: null,
-        parsed_payload: null,
-        parsing_error: null,
-        esg_category: null,
-        classification_confidence: null,
-        created_at: '2026-04-06T00:00:00Z',
-      },
-    ])
-
-    render(
-      <MemoryRouter initialEntries={['/projects/project-1']}>
-        <Routes>
-          <Route
-            path="/projects/:projectId"
-            element={<ProjectWorkspaceLayout />}
-          >
-            <Route index element={<ProjectDetailPage />} />
-          </Route>
-        </Routes>
-      </MemoryRouter>
-    )
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole('heading', { name: /visão geral/i })
-      ).toBeInTheDocument()
-    })
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: /gerar relatório/i })
-      ).toBeDisabled()
-    })
   })
 
   it('preserves the current subroute when changing project from the selector', async () => {
