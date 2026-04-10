@@ -2,6 +2,9 @@
 
 from app.schemas.auth import AuthMeResponse
 from app.schemas.document import (
+    ClassificationRebuildResponse,
+    DocumentExtractionResponse,
+    DocumentExtractionUpdateRequest,
     DocumentResponse,
     DocumentUpdateRequest,
     DocumentUploadRequest,
@@ -11,6 +14,9 @@ from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
 
 __all__ = [
     "AuthMeResponse",
+    "ClassificationRebuildResponse",
+    "DocumentExtractionResponse",
+    "DocumentExtractionUpdateRequest",
     "DocumentResponse",
     "DocumentUpdateRequest",
     "DocumentUploadRequest",

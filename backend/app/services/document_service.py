@@ -9,8 +9,13 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Document, Project
-from app.models.enums import DocumentFileType, DocumentParsingStatus
+from app.models import Document, DocumentExtraction, Project
+from app.models.enums import (
+    DocumentFileType,
+    DocumentParsingStatus,
+    ExtractionReviewStatus,
+)
+from app.services.data_extraction_service import recalculate_document_classification
 from app.services.storage_service import StorageObjectMetadata, StorageService
 
 MAX_DOCUMENT_SIZE_BYTES = 50 * 1024 * 1024
@@ -204,7 +209,23 @@ async def update_document_esg_category(
     esg_category: str | None,
 ) -> Document:
     normalized_category = esg_category.strip() if esg_category else None
-    document.esg_category = normalized_category or None
+    result = await session.execute(
+        select(DocumentExtraction).where(DocumentExtraction.document_id == document.id)
+    )
+    extractions = list(result.scalars().all())
+
+    if extractions and normalized_category:
+        for extraction in extractions:
+            if extraction.review_status == ExtractionReviewStatus.IGNORED:
+                continue
+            extraction.corrected_esg_category = normalized_category
+            extraction.review_status = ExtractionReviewStatus.CORRECTED
+        recalculate_document_classification(document, extractions)
+    else:
+        document.esg_category = normalized_category or None
+        if normalized_category is None:
+            document.classification_confidence = None
+
     await session.commit()
     await session.refresh(document)
     return document

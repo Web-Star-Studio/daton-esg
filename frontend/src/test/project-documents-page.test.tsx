@@ -186,6 +186,7 @@ describe('ProjectDocumentsPage', () => {
       parsed_payload: null,
       parsing_error: null,
       esg_category: null,
+      classification_confidence: null,
       created_at: '2026-04-06T00:00:00Z',
     }
 
@@ -260,6 +261,7 @@ describe('ProjectDocumentsPage', () => {
         parsed_payload: null,
         parsing_error: null,
         esg_category: null,
+        classification_confidence: null,
         created_at: '2026-04-06T00:00:00Z',
       },
     ])
@@ -301,6 +303,7 @@ describe('ProjectDocumentsPage', () => {
           parsed_payload: null,
           parsing_error: null,
           esg_category: null,
+          classification_confidence: null,
           created_at: '2026-04-06T00:00:00Z',
         },
       ])
@@ -317,6 +320,7 @@ describe('ProjectDocumentsPage', () => {
           parsed_payload: { provider: 'local' },
           parsing_error: null,
           esg_category: null,
+          classification_confidence: null,
           created_at: '2026-04-06T00:00:00Z',
         },
       ])
@@ -353,6 +357,7 @@ describe('ProjectDocumentsPage', () => {
           parsed_payload: null,
           parsing_error: null,
           esg_category: null,
+          classification_confidence: null,
           created_at: '2026-04-06T00:00:00Z',
         },
       ])
@@ -386,6 +391,7 @@ describe('ProjectDocumentsPage', () => {
         parsed_payload: null,
         parsing_error: 'Falha ao processar o PDF.',
         esg_category: null,
+        classification_confidence: null,
         created_at: '2026-04-06T00:00:00Z',
       },
     ])

@@ -10,10 +10,13 @@ import type { ProjectRecord } from '../types/project'
 
 const STATUS_FILTER_OPTIONS = [
   { label: 'Todos', value: '' },
-  { label: 'Em coleta', value: 'collecting' },
-  { label: 'Em geração', value: 'generating' },
-  { label: 'Em revisão', value: 'reviewing' },
-  { label: 'Finalizado', value: 'finalized' },
+  { label: 'Planejamento', value: 'planning' },
+  { label: 'Coleta', value: 'collecting' },
+  { label: 'Análise', value: 'analyzing' },
+  { label: 'Rel. Preliminar', value: 'preliminary_report' },
+  { label: 'Rel. Final', value: 'final_report' },
+  { label: 'Ajustes', value: 'alignment' },
+  { label: 'Diagramação', value: 'layout' },
   { label: 'Arquivado', value: 'archived' },
 ] as const
 

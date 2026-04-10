@@ -5,6 +5,7 @@ import { DashboardPage } from './pages/dashboard-page'
 import { LoginPage } from './pages/login-page'
 import { ProjectWorkspaceLayout } from './components/project-workspace-layout'
 import { ProjectDetailPage } from './pages/project-detail-page'
+import { ProjectDataPage } from './pages/project-data-page'
 import { ProjectDocumentsPage } from './pages/project-documents-page'
 import { ProjectFormPage } from './pages/project-form-page'
 import { ProjectIndicatorsPage } from './pages/project-indicators-page'
@@ -57,6 +58,7 @@ function App() {
         }
       >
         <Route index element={<ProjectDetailPage />} />
+        <Route path="data" element={<ProjectDataPage />} />
         <Route path="documents" element={<ProjectDocumentsPage />} />
         <Route path="indicators" element={<ProjectIndicatorsPage />} />
       </Route>

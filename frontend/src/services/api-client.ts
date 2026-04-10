@@ -1,11 +1,13 @@
 import type { AuthenticatedUser } from '../types/auth'
 import type {
   CreateProjectDocumentUploadInput,
+  DocumentExtraction,
   ProjectCreateInput,
   ProjectDocument,
   ProjectDocumentUploadSession,
   ProjectRecord,
   ProjectUpdateInput,
+  UpdateDocumentExtractionInput,
 } from '../types/project'
 
 let authToken: string | null = null
@@ -232,6 +234,109 @@ export async function deleteProjectDocument(
       `Falha ao remover o documento (${response.status}).`
     )
   }
+}
+
+export async function fetchProjectDataExtractions(
+  projectId: string,
+  filters?: {
+    category?: string
+    confidence?: string
+    document_id?: string
+    review_status?: string
+    search?: string
+  }
+) {
+  const query = new URLSearchParams()
+
+  if (filters?.document_id) {
+    query.set('document_id', filters.document_id)
+  }
+  if (filters?.category) {
+    query.set('category', filters.category)
+  }
+  if (filters?.confidence) {
+    query.set('confidence', filters.confidence)
+  }
+  if (filters?.review_status) {
+    query.set('review_status', filters.review_status)
+  }
+  if (filters?.search) {
+    query.set('search', filters.search)
+  }
+
+  const response = await apiFetch(
+    `/api/v1/projects/${projectId}/data-extractions${
+      query.size > 0 ? `?${query.toString()}` : ''
+    }`
+  )
+
+  if (!response.ok) {
+    throw await parseApiError(
+      response,
+      `Falha ao carregar os dados extraídos (${response.status}).`
+    )
+  }
+
+  return (await response.json()) as DocumentExtraction[]
+}
+
+export async function updateProjectDataExtraction(
+  projectId: string,
+  extractionId: string,
+  payload: UpdateDocumentExtractionInput
+) {
+  const response = await apiFetch(
+    `/api/v1/projects/${projectId}/data-extractions/${extractionId}`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    }
+  )
+
+  if (!response.ok) {
+    throw await parseApiError(
+      response,
+      `Falha ao atualizar a revisão do dado (${response.status}).`
+    )
+  }
+
+  return (await response.json()) as DocumentExtraction
+}
+
+export async function rebuildProjectClassification(projectId: string) {
+  const response = await apiFetch(`/api/v1/projects/${projectId}/classification/rebuild`, {
+    method: 'POST',
+  })
+
+  if (!response.ok) {
+    throw await parseApiError(
+      response,
+      `Falha ao reclassificar os documentos (${response.status}).`
+    )
+  }
+
+  return (await response.json()) as {
+    documents_processed: number
+    extractions_created: number
+  }
+}
+
+export async function validateProjectClassification(projectId: string) {
+  const response = await apiFetch(`/api/v1/projects/${projectId}/classification/validate`, {
+    method: 'POST',
+  })
+
+  if (!response.ok) {
+    throw await parseApiError(
+      response,
+      `Falha ao validar os dados do projeto (${response.status}).`
+    )
+  }
+
+  return (await response.json()) as ProjectRecord
 }
 
 export function uploadFileToPresignedUrl(

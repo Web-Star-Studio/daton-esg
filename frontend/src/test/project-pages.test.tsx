@@ -253,6 +253,7 @@ describe('project pages', () => {
         parsed_payload: null,
         parsing_error: null,
         esg_category: null,
+        classification_confidence: null,
         created_at: '2026-04-06T00:00:00Z',
       },
     ])

@@ -22,6 +22,13 @@ function getRouteShellDefaults(pathname: string): {
     }
   }
 
+  if (pathname.endsWith('/data')) {
+    return {
+      activeSidebarKey: 'data',
+      pageTitle: 'Dados',
+    }
+  }
+
   if (pathname.endsWith('/indicators')) {
     return {
       activeSidebarKey: 'indicators',
@@ -162,6 +169,7 @@ export function ProjectWorkspaceLayout() {
         activeSidebarKey={activeSidebarKey}
         companyName={project?.org_name ?? COMPANY_PLACEHOLDER}
         currentProjectId={project?.id ?? projectId}
+        dataHref={projectId ? `/projects/${projectId}/data` : undefined}
         documentsHref={
           projectId ? `/projects/${projectId}/documents` : undefined
         }

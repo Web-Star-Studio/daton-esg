@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     s3_bucket_name: str = "worton-esg-development"
     aws_textract_region: str | None = None
     document_parsing_pdf_provider: str = "auto"
+    anthropic_api_key: str | None = None
+    classification_model: str = "claude-sonnet-4-6-20250514"
+    classification_temperature: float = 0.0
     aws_cognito_region: str = "us-east-1"
     aws_cognito_user_pool_id: str = "us-east-1_example123"
     aws_cognito_app_client_id: str = "exampleclientid1234567890"

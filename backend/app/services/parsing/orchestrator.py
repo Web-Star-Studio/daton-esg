@@ -8,6 +8,7 @@ from sqlalchemy import select
 from app.core.database import SessionLocal
 from app.models import Document
 from app.models.enums import DocumentFileType, DocumentParsingStatus
+from app.services.data_extraction_service import rebuild_document_extractions
 from app.services.parsing import ParsedDocumentResult
 from app.services.parsing.docx_parser import parse_docx_document
 from app.services.parsing.excel_parser import (
@@ -110,6 +111,11 @@ async def run_document_parsing(
                 document.extracted_text = parsed_result.extracted_text or None
                 document.parsed_payload = parsed_result.parsed_payload
                 document.parsing_error = None
+                await rebuild_document_extractions(
+                    session,
+                    document=document,
+                    parsed_result=parsed_result,
+                )
                 document.parsing_status = DocumentParsingStatus.COMPLETED
                 await session.commit()
 
