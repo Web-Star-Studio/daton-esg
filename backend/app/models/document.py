@@ -1,17 +1,21 @@
 import uuid
 from datetime import datetime
-from typing import Any
 
-from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, String, Text, func, text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    Enum,
+    ForeignKey,
+    String,
+    Text,
+    func,
+    text,
+)
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-from app.models.enums import (
-    ClassificationConfidence,
-    DocumentFileType,
-    DocumentParsingStatus,
-)
+from app.models.enums import DocumentFileType, DocumentIndexingStatus
 
 
 class Document(Base):
@@ -35,27 +39,22 @@ class Document(Base):
         nullable=False,
     )
     s3_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    directory_key: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     file_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    parsing_status: Mapped[DocumentParsingStatus] = mapped_column(
+    indexing_status: Mapped[DocumentIndexingStatus] = mapped_column(
         Enum(
-            DocumentParsingStatus,
-            name="document_parsing_status",
+            DocumentIndexingStatus,
+            name="document_indexing_status",
             values_callable=lambda enum: [member.value for member in enum],
         ),
         nullable=False,
-        default=DocumentParsingStatus.PENDING,
-        server_default=text("'pending'::document_parsing_status"),
+        default=DocumentIndexingStatus.PENDING,
+        server_default=text("'pending'::document_indexing_status"),
+        index=True,
     )
-    extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)
-    parsed_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
-    parsing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    esg_category: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    classification_confidence: Mapped[ClassificationConfidence | None] = mapped_column(
-        Enum(
-            ClassificationConfidence,
-            name="classification_confidence",
-            values_callable=lambda enum: [member.value for member in enum],
-        ),
+    indexing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    indexed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
         nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(
@@ -65,8 +64,8 @@ class Document(Base):
     )
 
     project = relationship("Project", back_populates="documents")
-    extractions = relationship(
-        "DocumentExtraction",
+    rag_chunks = relationship(
+        "DocumentRagChunk",
         back_populates="document",
         cascade="all, delete-orphan",
     )

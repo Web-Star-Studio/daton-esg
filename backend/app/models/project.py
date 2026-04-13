@@ -66,11 +66,10 @@ class Project(Base):
     documents = relationship(
         "Document", back_populates="project", cascade="all, delete-orphan"
     )
-    document_extractions = relationship(
-        "DocumentExtraction",
-        back_populates="project",
-        cascade="all, delete-orphan",
-    )
     reports = relationship(
         "Report", back_populates="project", cascade="all, delete-orphan"
+    )
+    rag_chunks = relationship(
+        "DocumentRagChunk",
+        cascade="all, delete-orphan",
     )

@@ -11,7 +11,7 @@ from app.main import create_app
 from app.models import Document, Project, User
 from app.models.enums import (
     DocumentFileType,
-    DocumentParsingStatus,
+    DocumentIndexingStatus,
     ProjectStatus,
     UserRole,
 )
@@ -44,16 +44,21 @@ def make_project(user: User) -> Project:
     )
 
 
-def make_document(project: Project) -> Document:
+def make_document(
+    project: Project, directory_key: str = "gestao-ambiental"
+) -> Document:
     document_id = uuid4()
     return Document(
         id=document_id,
         project_id=project.id,
         filename="inventario.pdf",
         file_type=DocumentFileType.PDF,
-        s3_key=f"uploads/{project.id}/{document_id}/inventario.pdf",
+        s3_key=(f"uploads/{project.id}/{directory_key}/{document_id}/inventario.pdf"),
+        directory_key=directory_key,
         file_size_bytes=2048,
-        parsing_status=DocumentParsingStatus.PENDING,
+        indexing_status=DocumentIndexingStatus.PENDING,
+        indexing_error=None,
+        indexed_at=None,
         created_at=datetime.now(timezone.utc),
     )
 
@@ -93,6 +98,7 @@ def test_create_document_upload_returns_presigned_url(
     async def fake_create_document_upload(_session, **kwargs):
         assert _session is session
         assert kwargs["project"] is project
+        assert kwargs["directory_key"] == "gestao-ambiental"
         return document, "http://localstack:4566/upload-url", "application/pdf"
 
     monkeypatch.setattr(
@@ -108,6 +114,7 @@ def test_create_document_upload_returns_presigned_url(
         response = client.post(
             f"/api/v1/projects/{project.id}/documents",
             json={
+                "directory_key": "gestao-ambiental",
                 "filename": "inventario.pdf",
                 "file_size_bytes": 2048,
             },
@@ -134,11 +141,13 @@ def test_list_documents_returns_project_documents(monkeypatch, documents_app) ->
         _session,
         _project_id,
         *,
+        directory_key,
         limit,
         offset,
     ):
         assert _session is session
         assert _project_id == project.id
+        assert directory_key == "gestao-ambiental"
         assert limit == 100
         assert offset == 0
         return [document]
@@ -153,18 +162,20 @@ def test_list_documents_returns_project_documents(monkeypatch, documents_app) ->
     )
 
     with TestClient(app) as client:
-        response = client.get(f"/api/v1/projects/{project.id}/documents")
+        response = client.get(
+            f"/api/v1/projects/{project.id}/documents?directory_key=gestao-ambiental"
+        )
 
     assert response.status_code == 200
     assert response.json()[0]["id"] == str(document.id)
     assert response.json()[0]["filename"] == "inventario.pdf"
+    assert response.json()[0]["directory_key"] == "gestao-ambiental"
 
 
-def test_confirm_document_upload_schedules_parsing(monkeypatch, documents_app) -> None:
+def test_confirm_document_upload_returns_document(monkeypatch, documents_app) -> None:
     app, session, user = documents_app
     project = make_project(user)
     document = make_document(project)
-    scheduled_document_ids: list[str] = []
 
     async def fake_get_project_for_user(_session, _project_id, _user_id):
         assert _session is session
@@ -183,9 +194,6 @@ def test_confirm_document_upload_schedules_parsing(monkeypatch, documents_app) -
         assert kwargs["document"] is document
         return document
 
-    async def fake_run_document_parsing(document_id):
-        scheduled_document_ids.append(str(document_id))
-
     monkeypatch.setattr(
         "app.api.documents.get_project_for_user",
         fake_get_project_for_user,
@@ -198,9 +206,14 @@ def test_confirm_document_upload_schedules_parsing(monkeypatch, documents_app) -
         "app.api.documents.confirm_document_upload",
         fake_confirm_document_upload,
     )
+    scheduled_document_ids: list[str] = []
+
+    async def fake_run_document_rag_ingestion_task(document_id):
+        scheduled_document_ids.append(str(document_id))
+
     monkeypatch.setattr(
-        "app.api.documents.run_document_parsing",
-        fake_run_document_parsing,
+        "app.api.documents.run_document_rag_ingestion_task",
+        fake_run_document_rag_ingestion_task,
     )
 
     with TestClient(app) as client:
@@ -209,6 +222,8 @@ def test_confirm_document_upload_schedules_parsing(monkeypatch, documents_app) -
         )
 
     assert response.status_code == 200
+    assert response.json()["id"] == str(document.id)
+    assert response.json()["indexing_status"] == "pending"
     assert scheduled_document_ids == [str(document.id)]
 
 
@@ -240,6 +255,14 @@ def test_delete_document_returns_no_content(monkeypatch, documents_app) -> None:
     )
     monkeypatch.setattr("app.api.documents.delete_document", fake_delete_document)
 
+    async def fake_delete_document_rag_knowledge(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(
+        "app.api.documents.delete_document_rag_knowledge",
+        fake_delete_document_rag_knowledge,
+    )
+
     with TestClient(app) as client:
         response = client.delete(
             f"/api/v1/projects/{project.id}/documents/{document.id}"
@@ -248,7 +271,7 @@ def test_delete_document_returns_no_content(monkeypatch, documents_app) -> None:
     assert response.status_code == 204
 
 
-def test_patch_document_updates_esg_category(monkeypatch, documents_app) -> None:
+def test_patch_document_moves_directory(monkeypatch, documents_app) -> None:
     app, session, user = documents_app
     project = make_project(user)
     document = make_document(project)
@@ -265,11 +288,11 @@ def test_patch_document_updates_esg_category(monkeypatch, documents_app) -> None
         assert _document_id == document.id
         return document
 
-    async def fake_update_document_esg_category(_session, **kwargs):
+    async def fake_move_document_to_directory(_session, **kwargs):
         assert _session is session
         assert kwargs["document"] is document
-        assert kwargs["esg_category"] == "ambiental"
-        document.esg_category = "ambiental"
+        assert kwargs["directory_key"] == "governanca-corporativa"
+        document.directory_key = "governanca-corporativa"
         return document
 
     monkeypatch.setattr(
@@ -281,36 +304,23 @@ def test_patch_document_updates_esg_category(monkeypatch, documents_app) -> None
         fake_get_document_for_project,
     )
     monkeypatch.setattr(
-        "app.api.documents.update_document_esg_category",
-        fake_update_document_esg_category,
+        "app.api.documents.move_document_to_directory",
+        fake_move_document_to_directory,
     )
 
-    with TestClient(app) as client:
-        response = client.patch(
-            f"/api/v1/projects/{project.id}/documents/{document.id}",
-            json={"esg_category": "ambiental"},
-        )
-
-    assert response.status_code == 200
-    assert response.json()["esg_category"] == "ambiental"
-
-    async def fake_update_document_esg_category_whitespace(_session, **kwargs):
-        assert _session is session
-        assert kwargs["document"] is document
-        assert kwargs["esg_category"] is None
-        document.esg_category = None
-        return document
+    async def fake_sync_document_rag_metadata(*_args, **_kwargs):
+        return None
 
     monkeypatch.setattr(
-        "app.api.documents.update_document_esg_category",
-        fake_update_document_esg_category_whitespace,
+        "app.api.documents.sync_document_rag_metadata",
+        fake_sync_document_rag_metadata,
     )
 
     with TestClient(app) as client:
         response = client.patch(
             f"/api/v1/projects/{project.id}/documents/{document.id}",
-            json={"esg_category": "   "},
+            json={"directory_key": "governanca-corporativa"},
         )
 
     assert response.status_code == 200
-    assert response.json()["esg_category"] is None
+    assert response.json()["directory_key"] == "governanca-corporativa"

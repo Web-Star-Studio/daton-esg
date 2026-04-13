@@ -31,31 +31,11 @@ class DocumentFileType(StrEnum):
     DOCX = "docx"
 
 
-class DocumentParsingStatus(StrEnum):
+class DocumentIndexingStatus(StrEnum):
     PENDING = "pending"
     PROCESSING = "processing"
-    COMPLETED = "completed"
+    INDEXED = "indexed"
     FAILED = "failed"
-
-
-class ClassificationConfidence(StrEnum):
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-
-
-class ExtractionReviewStatus(StrEnum):
-    PENDING = "pending"
-    APPROVED = "approved"
-    CORRECTED = "corrected"
-    IGNORED = "ignored"
-
-
-class ExtractionSourceKind(StrEnum):
-    PARAGRAPH = "paragraph"
-    TABLE_ROW = "table_row"
-    TABLE_CELL = "table_cell"
-    SHEET_ROW = "sheet_row"
 
 
 class ReportStatus(StrEnum):

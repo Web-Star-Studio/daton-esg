@@ -1,13 +1,14 @@
 import type { AuthenticatedUser } from '../types/auth'
 import type {
   CreateProjectDocumentUploadInput,
-  DocumentExtraction,
+  MoveProjectDocumentInput,
   ProjectCreateInput,
   ProjectDocument,
   ProjectDocumentUploadSession,
+  ProjectKnowledgeReindexResponse,
+  ProjectKnowledgeStatus,
   ProjectRecord,
   ProjectUpdateInput,
-  UpdateDocumentExtractionInput,
 } from '../types/project'
 
 let authToken: string | null = null
@@ -161,8 +162,21 @@ export async function archiveProject(projectId: string) {
   }
 }
 
-export async function fetchProjectDocuments(projectId: string) {
-  const response = await apiFetch(`/api/v1/projects/${projectId}/documents`)
+export async function fetchProjectDocuments(
+  projectId: string,
+  filters?: { directory_key?: string }
+) {
+  const query = new URLSearchParams()
+
+  if (filters?.directory_key) {
+    query.set('directory_key', filters.directory_key)
+  }
+
+  const response = await apiFetch(
+    `/api/v1/projects/${projectId}/documents${
+      query.size > 0 ? `?${query.toString()}` : ''
+    }`
+  )
 
   if (!response.ok) {
     throw await parseApiError(
@@ -236,57 +250,13 @@ export async function deleteProjectDocument(
   }
 }
 
-export async function fetchProjectDataExtractions(
+export async function moveProjectDocument(
   projectId: string,
-  filters?: {
-    category?: string
-    confidence?: string
-    document_id?: string
-    review_status?: string
-    search?: string
-  }
-) {
-  const query = new URLSearchParams()
-
-  if (filters?.document_id) {
-    query.set('document_id', filters.document_id)
-  }
-  if (filters?.category) {
-    query.set('category', filters.category)
-  }
-  if (filters?.confidence) {
-    query.set('confidence', filters.confidence)
-  }
-  if (filters?.review_status) {
-    query.set('review_status', filters.review_status)
-  }
-  if (filters?.search) {
-    query.set('search', filters.search)
-  }
-
-  const response = await apiFetch(
-    `/api/v1/projects/${projectId}/data-extractions${
-      query.size > 0 ? `?${query.toString()}` : ''
-    }`
-  )
-
-  if (!response.ok) {
-    throw await parseApiError(
-      response,
-      `Falha ao carregar os dados extraídos (${response.status}).`
-    )
-  }
-
-  return (await response.json()) as DocumentExtraction[]
-}
-
-export async function updateProjectDataExtraction(
-  projectId: string,
-  extractionId: string,
-  payload: UpdateDocumentExtractionInput
+  documentId: string,
+  payload: MoveProjectDocumentInput
 ) {
   const response = await apiFetch(
-    `/api/v1/projects/${projectId}/data-extractions/${extractionId}`,
+    `/api/v1/projects/${projectId}/documents/${documentId}`,
     {
       method: 'PATCH',
       headers: {
@@ -299,16 +269,31 @@ export async function updateProjectDataExtraction(
   if (!response.ok) {
     throw await parseApiError(
       response,
-      `Falha ao atualizar a revisão do dado (${response.status}).`
+      `Falha ao mover o documento (${response.status}).`
     )
   }
 
-  return (await response.json()) as DocumentExtraction
+  return (await response.json()) as ProjectDocument
 }
 
-export async function rebuildProjectClassification(projectId: string) {
+export async function fetchProjectKnowledgeStatus(projectId: string) {
   const response = await apiFetch(
-    `/api/v1/projects/${projectId}/classification/rebuild`,
+    `/api/v1/projects/${projectId}/knowledge/status`
+  )
+
+  if (!response.ok) {
+    throw await parseApiError(
+      response,
+      `Falha ao carregar o status da base de conhecimento (${response.status}).`
+    )
+  }
+
+  return (await response.json()) as ProjectKnowledgeStatus
+}
+
+export async function reindexProjectKnowledge(projectId: string) {
+  const response = await apiFetch(
+    `/api/v1/projects/${projectId}/knowledge/reindex`,
     {
       method: 'POST',
     }
@@ -317,32 +302,11 @@ export async function rebuildProjectClassification(projectId: string) {
   if (!response.ok) {
     throw await parseApiError(
       response,
-      `Falha ao reclassificar os documentos (${response.status}).`
+      `Falha ao reindexar a base de conhecimento (${response.status}).`
     )
   }
 
-  return (await response.json()) as {
-    documents_processed: number
-    extractions_created: number
-  }
-}
-
-export async function validateProjectClassification(projectId: string) {
-  const response = await apiFetch(
-    `/api/v1/projects/${projectId}/classification/validate`,
-    {
-      method: 'POST',
-    }
-  )
-
-  if (!response.ok) {
-    throw await parseApiError(
-      response,
-      `Falha ao validar os dados do projeto (${response.status}).`
-    )
-  }
-
-  return (await response.json()) as ProjectRecord
+  return (await response.json()) as ProjectKnowledgeReindexResponse
 }
 
 export function uploadFileToPresignedUrl(

@@ -15,17 +15,10 @@ function getRouteShellDefaults(pathname: string): {
   activeSidebarKey: SidebarItemKey
   pageTitle: string
 } {
-  if (pathname.endsWith('/documents')) {
+  if (pathname.includes('/documents')) {
     return {
       activeSidebarKey: 'documents',
       pageTitle: 'Documentos',
-    }
-  }
-
-  if (pathname.endsWith('/data')) {
-    return {
-      activeSidebarKey: 'data',
-      pageTitle: 'Dados',
     }
   }
 
@@ -169,7 +162,6 @@ export function ProjectWorkspaceLayout() {
         activeSidebarKey={activeSidebarKey}
         companyName={project?.org_name ?? COMPANY_PLACEHOLDER}
         currentProjectId={project?.id ?? projectId}
-        dataHref={projectId ? `/projects/${projectId}/data` : undefined}
         documentsHref={
           projectId ? `/projects/${projectId}/documents` : undefined
         }

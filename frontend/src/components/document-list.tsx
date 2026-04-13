@@ -1,9 +1,14 @@
+import type { DocumentDirectory } from '../constants/document-directories'
+import { LEGACY_UNCATEGORIZED_DIRECTORY_KEY } from '../constants/document-directories'
 import type { ProjectDocument } from '../types/project'
 
 type DocumentListProps = {
+  availableDirectories: DocumentDirectory[]
   deletingDocumentId: string | null
   documents: ProjectDocument[]
+  movingDocumentId: string | null
   onDelete?: (documentId: string) => void
+  onMove?: (documentId: string, directoryKey: string) => void
 }
 
 function formatFileSize(fileSizeBytes: number | null) {
@@ -18,38 +23,27 @@ function formatFileSize(fileSizeBytes: number | null) {
   return `${(fileSizeBytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function getParsingStatusLabel(status: ProjectDocument['parsing_status']) {
-  switch (status) {
-    case 'completed':
-      return 'Processado'
-    case 'failed':
-      return 'Falhou'
-    case 'processing':
-      return 'Processando'
-    case 'pending':
-    default:
-      return 'Pendente'
-  }
-}
+function formatCreatedAt(value: string) {
+  const date = new Date(value)
 
-function getParsingStatusColor(status: ProjectDocument['parsing_status']) {
-  switch (status) {
-    case 'completed':
-      return 'bg-[#e8f5e8] text-[#1a7a1a]'
-    case 'failed':
-      return 'bg-[#fff0f0] text-[#d01f1f]'
-    case 'processing':
-      return 'bg-[#fff8e8] text-[#9a6700]'
-    case 'pending':
-    default:
-      return 'bg-[#f0f0f5] text-[#86868b]'
+  if (Number.isNaN(date.getTime())) {
+    return 'Data indisponível'
   }
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(date)
 }
 
 export function DocumentList({
+  availableDirectories,
   deletingDocumentId,
   documents,
+  movingDocumentId,
   onDelete,
+  onMove,
 }: DocumentListProps) {
   if (documents.length === 0) {
     return null
@@ -60,77 +54,107 @@ export function DocumentList({
       <table className="w-full border-collapse text-left">
         <thead className="sticky top-0 z-10 bg-white">
           <tr>
-            <th className="h-10 w-[40%] border-b border-[#e5e5ea] px-6 align-middle text-[12px] font-medium uppercase tracking-[0.5px] text-[#86868b]">
+            <th className="h-10 w-[34%] border-b border-[#e5e5ea] px-6 align-middle text-[12px] font-medium uppercase tracking-[0.5px] text-[#86868b]">
               Nome
             </th>
-            <th className="h-10 w-[12%] border-b border-[#e5e5ea] px-6 align-middle text-[12px] font-medium uppercase tracking-[0.5px] text-[#86868b]">
+            <th className="h-10 w-[10%] border-b border-[#e5e5ea] px-6 align-middle text-[12px] font-medium uppercase tracking-[0.5px] text-[#86868b]">
               Tipo
             </th>
-            <th className="h-10 w-[15%] border-b border-[#e5e5ea] px-6 align-middle text-[12px] font-medium uppercase tracking-[0.5px] text-[#86868b]">
+            <th className="h-10 w-[13%] border-b border-[#e5e5ea] px-6 align-middle text-[12px] font-medium uppercase tracking-[0.5px] text-[#86868b]">
               Tamanho
             </th>
-            <th className="h-10 w-[18%] border-b border-[#e5e5ea] px-6 align-middle text-[12px] font-medium uppercase tracking-[0.5px] text-[#86868b]">
-              Status
+            <th className="h-10 w-[13%] border-b border-[#e5e5ea] px-6 align-middle text-[12px] font-medium uppercase tracking-[0.5px] text-[#86868b]">
+              Adicionado em
             </th>
-            {onDelete ? (
-              <th className="h-10 w-[15%] border-b border-[#e5e5ea] px-6 align-middle text-right text-[12px] font-medium uppercase tracking-[0.5px] text-[#86868b]">
-                Ações
-              </th>
-            ) : null}
+            <th className="h-10 w-[30%] border-b border-[#e5e5ea] px-6 align-middle text-right text-[12px] font-medium uppercase tracking-[0.5px] text-[#86868b]">
+              Ações
+            </th>
           </tr>
         </thead>
         <tbody>
-          {documents.map((document) => (
-            <tr
-              key={document.id}
-              className="border-b border-[#f5f5f7] transition-colors last:border-none hover:bg-[#f5f5f7]"
-            >
-              <td className="h-12 px-6 align-middle">
-                <p className="truncate text-sm font-medium text-[#1d1d1f]">
-                  {document.filename}
-                </p>
-                {document.parsing_status === 'failed' &&
-                document.parsing_error ? (
-                  <p className="mt-0.5 truncate text-[11px] text-[#d01f1f]">
-                    Erro no processamento
+          {documents.map((document) => {
+            const isDeleting = deletingDocumentId === document.id
+            const isMoving = movingDocumentId === document.id
+            const moveOptions =
+              document.directory_key === LEGACY_UNCATEGORIZED_DIRECTORY_KEY
+                ? availableDirectories
+                : availableDirectories.filter(
+                    (directory) => !directory.isLegacyOnly
+                  )
+
+            return (
+              <tr
+                key={document.id}
+                className="border-b border-[#f5f5f7] transition-colors last:border-none hover:bg-[#f5f5f7]"
+              >
+                <td className="h-12 px-6 align-middle">
+                  <p className="truncate text-sm font-medium text-[#1d1d1f]">
+                    {document.filename}
                   </p>
-                ) : null}
-              </td>
-              <td className="h-12 px-6 align-middle text-sm text-[#1d1d1f]">
-                {document.file_type.toUpperCase()}
-              </td>
-              <td className="h-12 px-6 align-middle text-sm text-[#86868b]">
-                {formatFileSize(document.file_size_bytes)}
-              </td>
-              <td className="h-12 px-6 align-middle">
-                <span
-                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium tracking-[-0.01em] ${getParsingStatusColor(document.parsing_status)}`}
-                >
-                  {getParsingStatusLabel(document.parsing_status)}
-                </span>
-              </td>
-              {onDelete ? (
-                <td className="h-12 px-6 align-middle text-right">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onDelete(document.id)
-                    }}
-                    disabled={deletingDocumentId === document.id}
-                    className="apple-focus-ring inline-flex items-center gap-1.5 rounded-[0.7rem] px-2.5 py-1.5 text-[12px] font-medium tracking-[-0.01em] text-[#86868b] transition-colors hover:bg-black/[0.04] hover:text-[#1d1d1f] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <span
-                      aria-hidden="true"
-                      className="material-symbols-outlined text-[15px]"
-                    >
-                      delete
-                    </span>
-                    Remover
-                  </button>
                 </td>
-              ) : null}
-            </tr>
-          ))}
+                <td className="h-12 px-6 align-middle text-sm text-[#1d1d1f]">
+                  {document.file_type.toUpperCase()}
+                </td>
+                <td className="h-12 px-6 align-middle text-sm text-[#86868b]">
+                  {formatFileSize(document.file_size_bytes)}
+                </td>
+                <td className="h-12 px-6 align-middle text-sm text-[#86868b]">
+                  {formatCreatedAt(document.created_at)}
+                </td>
+                <td className="h-12 px-6 align-middle">
+                  <div className="flex items-center justify-end gap-3">
+                    {onMove ? (
+                      <label
+                        className="sr-only"
+                        htmlFor={`directory-${document.id}`}
+                      >
+                        Mover documento
+                      </label>
+                    ) : null}
+                    {onMove ? (
+                      <select
+                        id={`directory-${document.id}`}
+                        value={document.directory_key}
+                        onChange={(event) => {
+                          const nextDirectoryKey = event.target.value
+                          if (nextDirectoryKey === document.directory_key) {
+                            return
+                          }
+                          onMove(document.id, nextDirectoryKey)
+                        }}
+                        disabled={isDeleting || isMoving}
+                        className="apple-focus-ring min-w-[220px] rounded-[0.7rem] border border-black/8 bg-white px-3 py-2 text-[12px] font-medium tracking-[-0.01em] text-[#1d1d1f] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {moveOptions.map((directory) => (
+                          <option key={directory.key} value={directory.key}>
+                            {directory.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : null}
+                    {onDelete ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onDelete(document.id)
+                        }}
+                        disabled={isDeleting || isMoving}
+                        className="apple-focus-ring inline-flex items-center gap-1.5 rounded-[0.7rem] px-2.5 py-1.5 text-[12px] font-medium tracking-[-0.01em] text-[#86868b] transition-colors hover:bg-black/[0.04] hover:text-[#1d1d1f] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="material-symbols-outlined text-[15px]"
+                        >
+                          delete
+                        </span>
+                        Remover
+                      </button>
+                    ) : null}
+                  </div>
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>

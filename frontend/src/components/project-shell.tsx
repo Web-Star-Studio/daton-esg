@@ -18,7 +18,6 @@ import type { ProjectShellOption } from '../types/project'
 export type SidebarItemKey =
   | 'overview'
   | 'documents'
-  | 'data'
   | 'materiality'
   | 'indicators'
   | 'generation'
@@ -44,7 +43,6 @@ type ProjectShellProps = {
   companyName: string
   currentProjectId?: string
   overviewHref?: string
-  dataHref?: string
   documentsHref?: string
   indicatorsHref?: string
   pageActions?: PageAction[]
@@ -59,7 +57,6 @@ const sidebarItems: Array<{
 }> = [
   { key: 'overview', label: 'Visão Geral', icon: 'bar_chart' },
   { key: 'documents', label: 'Documentos', icon: 'folder' },
-  { key: 'data', label: 'Dados', icon: 'database' },
   { key: 'materiality', label: 'Materialidade & ODS', icon: 'ads_click' },
   { key: 'indicators', label: 'Indicadores', icon: 'format_list_numbered' },
   {
@@ -98,7 +95,6 @@ function getInitials(
 function getSidebarHref(
   itemKey: SidebarItemKey,
   links: {
-    dataHref?: string
     documentsHref?: string
     indicatorsHref?: string
     overviewHref?: string
@@ -116,10 +112,6 @@ function getSidebarHref(
     return links.documentsHref
   }
 
-  if (itemKey === 'data') {
-    return links.dataHref
-  }
-
   return undefined
 }
 
@@ -129,7 +121,6 @@ export function ProjectShell({
   companyName,
   currentProjectId,
   overviewHref,
-  dataHref,
   documentsHref,
   indicatorsHref,
   pageActions = [],
@@ -473,7 +464,6 @@ export function ProjectShell({
               {sidebarItems.map((item) => {
                 const isActive = item.key === activeSidebarKey
                 const href = getSidebarHref(item.key, {
-                  dataHref,
                   documentsHref,
                   indicatorsHref,
                   overviewHref,
@@ -581,7 +571,6 @@ export function ProjectShell({
               {sidebarItems.map((item) => {
                 const isActive = item.key === activeSidebarKey
                 const href = getSidebarHref(item.key, {
-                  dataHref,
                   documentsHref,
                   indicatorsHref,
                   overviewHref,

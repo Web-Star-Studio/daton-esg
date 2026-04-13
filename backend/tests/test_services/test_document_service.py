@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from app.models import Document, Project
 from app.models.enums import (
     DocumentFileType,
-    DocumentParsingStatus,
+    DocumentIndexingStatus,
     ProjectStatus,
     UserRole,
 )
@@ -19,6 +19,7 @@ from app.services.document_service import (
     confirm_document_upload,
     create_document_upload,
     delete_document,
+    move_document_to_directory,
     normalize_filename,
     validate_file_size,
 )
@@ -101,7 +102,9 @@ def make_project() -> Project:
     )
 
 
-def make_document(project: Project) -> Document:
+def make_document(
+    project: Project, directory_key: str = "gestao-ambiental"
+) -> Document:
     document_id = uuid4()
     return Document(
         id=document_id,
@@ -110,11 +113,15 @@ def make_document(project: Project) -> Document:
         file_type=DocumentFileType.PDF,
         s3_key=build_document_s3_key(
             project_id=project.id,
+            directory_key=directory_key,
             document_id=document_id,
             filename="inventario.pdf",
         ),
+        directory_key=directory_key,
         file_size_bytes=1024,
-        parsing_status=DocumentParsingStatus.PENDING,
+        indexing_status=DocumentIndexingStatus.PENDING,
+        indexing_error=None,
+        indexed_at=None,
         created_at=datetime.now(timezone.utc),
     )
 
@@ -131,6 +138,7 @@ async def test_create_document_upload_rejects_invalid_file_type() -> None:
             project=project,
             filename="dados.txt",
             file_size_bytes=1024,
+            directory_key="gestao-ambiental",
             storage=storage,
         )
 
@@ -150,6 +158,7 @@ async def test_create_document_upload_rejects_file_size_above_limit() -> None:
             project=project,
             filename="dados.pdf",
             file_size_bytes=MAX_DOCUMENT_SIZE_BYTES + 1,
+            directory_key="gestao-ambiental",
             storage=storage,
         )
 
@@ -158,7 +167,27 @@ async def test_create_document_upload_rejects_file_size_above_limit() -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_document_upload_returns_pending_document_and_upload_url() -> None:
+async def test_create_document_upload_requires_supported_directory() -> None:
+    session = FakeSession()
+    storage = FakeStorage()
+    project = make_project()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await create_document_upload(
+            session,
+            project=project,
+            filename="dados.pdf",
+            file_size_bytes=1024,
+            directory_key="categoria-invalida",
+            storage=storage,
+        )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "Unsupported document directory"
+
+
+@pytest.mark.asyncio
+async def test_create_document_upload_returns_document_and_upload_url() -> None:
     session = FakeSession()
     storage = FakeStorage()
     project = make_project()
@@ -168,13 +197,17 @@ async def test_create_document_upload_returns_pending_document_and_upload_url() 
         project=project,
         filename="inventario.pdf",
         file_size_bytes=4096,
+        directory_key="gestao-ambiental",
         storage=storage,
     )
 
     assert document.project_id == project.id
     assert document.file_type == DocumentFileType.PDF
-    assert document.parsing_status == DocumentParsingStatus.PENDING
-    assert document.s3_key.startswith(f"uploads/{project.id}/{document.id}/")
+    assert document.directory_key == "gestao-ambiental"
+    assert document.indexing_status == DocumentIndexingStatus.PENDING
+    assert document.s3_key.startswith(
+        f"uploads/{project.id}/gestao-ambiental/{document.id}/"
+    )
     assert content_type == "application/pdf"
     assert upload_url.startswith("http://localstack:4566/upload/uploads/")
     assert session.commit_count == 1
@@ -215,6 +248,23 @@ async def test_confirm_document_upload_raises_when_storage_object_is_missing() -
 
     assert exc_info.value.status_code == 409
     assert exc_info.value.detail == "Upload not found in storage"
+
+
+@pytest.mark.asyncio
+async def test_move_document_to_directory_updates_directory_key() -> None:
+    session = FakeSession()
+    project = make_project()
+    document = make_document(project, "gestao-ambiental")
+
+    moved_document = await move_document_to_directory(
+        session,
+        document=document,
+        directory_key="governanca-corporativa",
+    )
+
+    assert moved_document.directory_key == "governanca-corporativa"
+    assert session.commit_count == 1
+    assert session.refresh_count == 1
 
 
 @pytest.mark.parametrize("file_size_bytes", [0, -1])

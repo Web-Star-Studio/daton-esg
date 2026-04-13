@@ -232,13 +232,19 @@ describe('project pages', () => {
     mockFetchProjectDocuments.mockResolvedValue([])
 
     render(
-      <MemoryRouter initialEntries={['/projects/project-1/documents']}>
+      <MemoryRouter
+        initialEntries={['/projects/project-1/documents/gestao-ambiental']}
+      >
         <Routes>
           <Route
             path="/projects/:projectId"
             element={<ProjectWorkspaceLayout />}
           >
             <Route path="documents" element={<ProjectDocumentsPage />} />
+            <Route
+              path="documents/:directoryKey"
+              element={<ProjectDocumentsPage />}
+            />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -260,7 +266,7 @@ describe('project pages', () => {
     })
 
     expect(
-      screen.getByRole('heading', { name: /documentos/i })
+      screen.getByRole('heading', { name: /3\. gestão ambiental/i })
     ).toBeInTheDocument()
     expect(
       screen.getByRole('button', {
@@ -270,6 +276,12 @@ describe('project pages', () => {
     expect(mockFetchProject.mock.calls.map(([projectId]) => projectId)).toEqual(
       ['project-1', 'project-2']
     )
+    expect(mockFetchProjectDocuments).toHaveBeenNthCalledWith(1, 'project-1', {
+      directory_key: 'gestao-ambiental',
+    })
+    expect(mockFetchProjectDocuments).toHaveBeenNthCalledWith(2, 'project-2', {
+      directory_key: 'gestao-ambiental',
+    })
   })
 
   it('renders an error state instead of the form when loading an edit page fails', async () => {

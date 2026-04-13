@@ -10,6 +10,7 @@ import {
   fetchProject,
   fetchProjects,
   fetchProjectDocuments,
+  moveProjectDocument,
   uploadFileToPresignedUrl,
 } from '../services/api-client'
 import { useAuth } from '../hooks/use-auth'
@@ -34,6 +35,7 @@ vi.mock('../services/api-client', () => ({
   fetchProject: vi.fn(),
   fetchProjects: vi.fn(),
   fetchProjectDocuments: vi.fn(),
+  moveProjectDocument: vi.fn(),
   uploadFileToPresignedUrl: vi.fn(),
 }))
 
@@ -44,7 +46,27 @@ const mockFetchProjectDocuments = vi.mocked(fetchProjectDocuments)
 const mockCreateProjectDocumentUpload = vi.mocked(createProjectDocumentUpload)
 const mockConfirmProjectDocumentUpload = vi.mocked(confirmProjectDocumentUpload)
 const mockDeleteProjectDocument = vi.mocked(deleteProjectDocument)
+const mockMoveProjectDocument = vi.mocked(moveProjectDocument)
 const mockUploadFileToPresignedUrl = vi.mocked(uploadFileToPresignedUrl)
+
+function makeProjectDocument(
+  overrides: Partial<import('../types/project').ProjectDocument> = {}
+) {
+  return {
+    id: 'doc-1',
+    project_id: 'project-1',
+    filename: 'inventario.pdf',
+    file_type: 'pdf' as const,
+    s3_key: 'uploads/project-1/gestao-ambiental/doc-1/inventario.pdf',
+    directory_key: 'gestao-ambiental',
+    file_size_bytes: 2048,
+    indexing_status: 'indexed' as const,
+    indexing_error: null,
+    indexed_at: '2026-04-06T00:00:00Z',
+    created_at: '2026-04-06T00:00:00Z',
+    ...overrides,
+  }
+}
 
 function getAssertedFileInput(container: HTMLElement) {
   const input = container.querySelector('input[type="file"]')
@@ -56,16 +78,35 @@ function getAssertedFileInput(container: HTMLElement) {
   return input
 }
 
-function renderPage() {
+function renderPage(initialEntry = '/projects/project-1/documents') {
   return render(
-    <MemoryRouter initialEntries={['/projects/project-1/documents']}>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
         <Route path="/projects/:projectId" element={<ProjectWorkspaceLayout />}>
           <Route path="documents" element={<ProjectDocumentsPage />} />
+          <Route
+            path="documents/:directoryKey"
+            element={<ProjectDocumentsPage />}
+          />
         </Route>
       </Routes>
     </MemoryRouter>
   )
+}
+
+const baseProject = {
+  id: 'project-1',
+  org_name: 'Acme Inc.',
+  org_sector: 'Energia',
+  org_size: null,
+  org_location: null,
+  base_year: 2025,
+  scope: null,
+  status: 'collecting',
+  material_topics: null,
+  sdg_goals: null,
+  created_at: '2026-04-06T00:00:00Z',
+  updated_at: '2026-04-06T00:00:00Z',
 }
 
 describe('ProjectDocumentsPage', () => {
@@ -89,110 +130,42 @@ describe('ProjectDocumentsPage', () => {
         created_at: '2026-04-06T00:00:00Z',
       },
     })
-    mockFetchProject.mockResolvedValue({
-      id: 'project-1',
-      org_name: 'Acme Inc.',
-      org_sector: 'Energia',
-      org_size: null,
-      org_location: null,
-      base_year: 2025,
-      scope: null,
-      status: 'collecting',
-      material_topics: null,
-      sdg_goals: null,
-      created_at: '2026-04-06T00:00:00Z',
-      updated_at: '2026-04-06T00:00:00Z',
-    })
-    mockFetchProjects.mockResolvedValue([
-      {
-        id: 'project-1',
-        org_name: 'Acme Inc.',
-        org_sector: 'Energia',
-        org_size: null,
-        org_location: null,
-        base_year: 2025,
-        scope: null,
-        status: 'collecting',
-        material_topics: null,
-        sdg_goals: null,
-        created_at: '2026-04-06T00:00:00Z',
-        updated_at: '2026-04-06T00:00:00Z',
-      },
-    ])
+    mockFetchProject.mockResolvedValue(baseProject)
+    mockFetchProjects.mockResolvedValue([baseProject])
     mockFetchProjectDocuments.mockResolvedValue([])
     mockCreateProjectDocumentUpload.mockReset()
     mockConfirmProjectDocumentUpload.mockReset()
     mockDeleteProjectDocument.mockReset()
+    mockMoveProjectDocument.mockReset()
     mockUploadFileToPresignedUrl.mockReset()
   })
 
   afterEach(() => {
-    vi.useRealTimers()
     vi.clearAllMocks()
   })
 
-  it('loads the project and renders the documents empty state', async () => {
+  it('renders the drive root with the fixed folders and no uploader', async () => {
+    mockFetchProjectDocuments.mockResolvedValue([makeProjectDocument()])
+
     renderPage()
 
-    await waitFor(() => {
-      expect(
-        screen.getByRole('heading', { name: /documentos/i })
-      ).toBeInTheDocument()
-    })
-
     expect(
-      screen.getByRole('button', {
-        name: /arraste arquivos aqui ou clique para selecionar/i,
+      await screen.findByRole('link', {
+        name: /1\. visão estratégica de sustentabilidade/i,
       })
     ).toBeInTheDocument()
-    expect(mockFetchProject).toHaveBeenCalledWith('project-1')
-    expect(mockFetchProjectDocuments).toHaveBeenCalledWith('project-1')
     expect(
-      screen.getByRole('button', {
+      screen.getByRole('link', { name: /3\. gestão ambiental/i })
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', {
         name: /arraste arquivos aqui ou clique para selecionar/i,
       })
-    ).not.toBeDisabled()
+    ).not.toBeInTheDocument()
   })
 
-  it('shows a validation error for unsupported file types', async () => {
-    const { container } = renderPage()
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole('button', {
-          name: /arraste arquivos aqui ou clique para selecionar/i,
-        })
-      ).toBeInTheDocument()
-    })
-
-    const fileInput = getAssertedFileInput(container)
-
-    fireEvent.change(fileInput, {
-      target: {
-        files: [new File(['abc'], 'notas.txt', { type: 'text/plain' })],
-      },
-    })
-
-    expect(screen.getByText(/notas.txt: formato inválido/i)).toBeInTheDocument()
-    expect(mockCreateProjectDocumentUpload).not.toHaveBeenCalled()
-  })
-
-  it('uploads a document and refreshes the list', async () => {
-    const uploadedDocument = {
-      id: 'doc-1',
-      project_id: 'project-1',
-      filename: 'inventario.pdf',
-      file_type: 'pdf' as const,
-      s3_key: 'uploads/project-1/doc-1/inventario.pdf',
-      file_size_bytes: 2048,
-      parsing_status: 'pending' as const,
-      extracted_text: null,
-      parsed_payload: null,
-      parsing_error: null,
-      esg_category: null,
-      classification_confidence: null,
-      created_at: '2026-04-06T00:00:00Z',
-    }
+  it('uploads a document inside the selected folder', async () => {
+    const uploadedDocument = makeProjectDocument()
 
     mockFetchProjectDocuments
       .mockResolvedValueOnce([])
@@ -200,7 +173,7 @@ describe('ProjectDocumentsPage', () => {
     mockCreateProjectDocumentUpload.mockResolvedValue({
       document_id: 'doc-1',
       upload_url: 'http://localstack:4566/upload-url',
-      s3_key: 'uploads/project-1/doc-1/inventario.pdf',
+      s3_key: 'uploads/project-1/gestao-ambiental/doc-1/inventario.pdf',
       content_type: 'application/pdf',
       expires_in_seconds: 900,
     })
@@ -212,7 +185,9 @@ describe('ProjectDocumentsPage', () => {
     )
     mockConfirmProjectDocumentUpload.mockResolvedValue(uploadedDocument)
 
-    const { container } = renderPage()
+    const { container } = renderPage(
+      '/projects/project-1/documents/gestao-ambiental'
+    )
 
     await waitFor(() => {
       expect(
@@ -222,9 +197,7 @@ describe('ProjectDocumentsPage', () => {
       ).toBeInTheDocument()
     })
 
-    const fileInput = getAssertedFileInput(container)
-
-    fireEvent.change(fileInput, {
+    fireEvent.change(getAssertedFileInput(container), {
       target: {
         files: [
           new File(['pdf'], 'inventario.pdf', { type: 'application/pdf' }),
@@ -236,6 +209,7 @@ describe('ProjectDocumentsPage', () => {
       expect(mockCreateProjectDocumentUpload).toHaveBeenCalledWith(
         'project-1',
         {
+          directory_key: 'gestao-ambiental',
           filename: 'inventario.pdf',
           file_size_bytes: 3,
         }
@@ -250,30 +224,44 @@ describe('ProjectDocumentsPage', () => {
       'project-1',
       'doc-1'
     )
-    expect(mockFetchProjectDocuments).toHaveBeenCalledTimes(2)
   })
 
-  it('deletes a document from the list', async () => {
-    mockFetchProjectDocuments.mockResolvedValue([
-      {
-        id: 'doc-1',
-        project_id: 'project-1',
-        filename: 'inventario.pdf',
-        file_type: 'pdf',
-        s3_key: 'uploads/project-1/doc-1/inventario.pdf',
-        file_size_bytes: 2048,
-        parsing_status: 'pending',
-        extracted_text: null,
-        parsed_payload: null,
-        parsing_error: null,
-        esg_category: null,
-        classification_confidence: null,
-        created_at: '2026-04-06T00:00:00Z',
-      },
-    ])
+  it('moves a document to another folder', async () => {
+    mockFetchProjectDocuments.mockResolvedValue([makeProjectDocument()])
+    mockMoveProjectDocument.mockResolvedValue(
+      makeProjectDocument({
+        directory_key: 'governanca-corporativa',
+      })
+    )
+
+    renderPage('/projects/project-1/documents/gestao-ambiental')
+
+    expect(await screen.findByText('inventario.pdf')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText(/mover documento/i), {
+      target: { value: 'governanca-corporativa' },
+    })
+
+    await waitFor(() => {
+      expect(mockMoveProjectDocument).toHaveBeenCalledWith(
+        'project-1',
+        'doc-1',
+        {
+          directory_key: 'governanca-corporativa',
+        }
+      )
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByText('inventario.pdf')).not.toBeInTheDocument()
+    })
+  })
+
+  it('deletes a document from the current folder', async () => {
+    mockFetchProjectDocuments.mockResolvedValue([makeProjectDocument()])
     mockDeleteProjectDocument.mockResolvedValue(undefined)
 
-    renderPage()
+    renderPage('/projects/project-1/documents/gestao-ambiental')
 
     await waitFor(() => {
       expect(screen.getByText('inventario.pdf')).toBeInTheDocument()
@@ -291,123 +279,5 @@ describe('ProjectDocumentsPage', () => {
     await waitFor(() => {
       expect(screen.queryByText('inventario.pdf')).not.toBeInTheDocument()
     })
-  })
-
-  it('polls while there are documents still being processed', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    mockFetchProjectDocuments
-      .mockResolvedValueOnce([
-        {
-          id: 'doc-1',
-          project_id: 'project-1',
-          filename: 'inventario.pdf',
-          file_type: 'pdf',
-          s3_key: 'uploads/project-1/doc-1/inventario.pdf',
-          file_size_bytes: 2048,
-          parsing_status: 'processing',
-          extracted_text: null,
-          parsed_payload: null,
-          parsing_error: null,
-          esg_category: null,
-          classification_confidence: null,
-          created_at: '2026-04-06T00:00:00Z',
-        },
-      ])
-      .mockResolvedValueOnce([
-        {
-          id: 'doc-1',
-          project_id: 'project-1',
-          filename: 'inventario.pdf',
-          file_type: 'pdf',
-          s3_key: 'uploads/project-1/doc-1/inventario.pdf',
-          file_size_bytes: 2048,
-          parsing_status: 'completed',
-          extracted_text: 'Texto extraído',
-          parsed_payload: { provider: 'local' },
-          parsing_error: null,
-          esg_category: null,
-          classification_confidence: null,
-          created_at: '2026-04-06T00:00:00Z',
-        },
-      ])
-
-    renderPage()
-
-    expect(await screen.findByText('inventario.pdf')).toBeInTheDocument()
-
-    await vi.advanceTimersByTimeAsync(3000)
-
-    await waitFor(() => {
-      expect(mockFetchProjectDocuments).toHaveBeenCalledTimes(2)
-    })
-    expect(screen.getByText(/processado/i)).toBeInTheDocument()
-  })
-
-  it('handles polling refresh failures without exposing unhandled rejections', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    const consoleErrorSpy = vi
-      .spyOn(console, 'error')
-      .mockImplementation(() => undefined)
-
-    mockFetchProjectDocuments
-      .mockResolvedValueOnce([
-        {
-          id: 'doc-1',
-          project_id: 'project-1',
-          filename: 'inventario.pdf',
-          file_type: 'pdf',
-          s3_key: 'uploads/project-1/doc-1/inventario.pdf',
-          file_size_bytes: 2048,
-          parsing_status: 'processing',
-          extracted_text: null,
-          parsed_payload: null,
-          parsing_error: null,
-          esg_category: null,
-          classification_confidence: null,
-          created_at: '2026-04-06T00:00:00Z',
-        },
-      ])
-      .mockRejectedValueOnce(new Error('Falha temporária'))
-
-    renderPage()
-
-    expect(await screen.findByText('inventario.pdf')).toBeInTheDocument()
-
-    await vi.advanceTimersByTimeAsync(3000)
-
-    await waitFor(() => {
-      expect(consoleErrorSpy).toHaveBeenCalled()
-      expect(mockFetchProjectDocuments).toHaveBeenCalledTimes(2)
-    })
-
-    consoleErrorSpy.mockRestore()
-  })
-
-  it('renders a safe parsing error message for failed documents', async () => {
-    mockFetchProjectDocuments.mockResolvedValue([
-      {
-        id: 'doc-1',
-        project_id: 'project-1',
-        filename: 'inventario.pdf',
-        file_type: 'pdf',
-        s3_key: 'uploads/project-1/doc-1/inventario.pdf',
-        file_size_bytes: 2048,
-        parsing_status: 'failed',
-        extracted_text: null,
-        parsed_payload: null,
-        parsing_error: 'Falha ao processar o PDF.',
-        esg_category: null,
-        classification_confidence: null,
-        created_at: '2026-04-06T00:00:00Z',
-      },
-    ])
-
-    renderPage()
-
-    expect(await screen.findByText('inventario.pdf')).toBeInTheDocument()
-    expect(screen.getByText('Erro no processamento')).toBeInTheDocument()
-    expect(
-      screen.queryByText('Falha ao processar o PDF.')
-    ).not.toBeInTheDocument()
   })
 })

@@ -9,13 +9,9 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Document, DocumentExtraction, Project
-from app.models.enums import (
-    DocumentFileType,
-    DocumentParsingStatus,
-    ExtractionReviewStatus,
-)
-from app.services.data_extraction_service import recalculate_document_classification
+from app.models import Document, Project
+from app.models.enums import DocumentFileType, DocumentIndexingStatus
+from app.services.document_directories import is_valid_directory_key
 from app.services.storage_service import StorageObjectMetadata, StorageService
 
 MAX_DOCUMENT_SIZE_BYTES = 50 * 1024 * 1024
@@ -69,26 +65,31 @@ def validate_file_size(file_size_bytes: int) -> None:
 def build_document_s3_key(
     *,
     project_id: UUID,
+    directory_key: str,
     document_id: UUID,
     filename: str,
 ) -> str:
-    return f"uploads/{project_id}/{document_id}/{normalize_filename(filename)}"
+    return (
+        f"uploads/{project_id}/{directory_key}/{document_id}/"
+        f"{normalize_filename(filename)}"
+    )
 
 
 async def list_documents_for_project(
     session: AsyncSession,
     project_id: UUID,
     *,
+    directory_key: str | None = None,
     limit: int = MAX_DOCUMENT_LIST_LIMIT,
     offset: int = 0,
 ) -> list[Document]:
     normalized_limit = max(1, min(limit, MAX_DOCUMENT_LIST_LIMIT))
     normalized_offset = max(0, offset)
-
+    query = select(Document).where(Document.project_id == project_id)
+    if directory_key:
+        query = query.where(Document.directory_key == directory_key)
     result = await session.execute(
-        select(Document)
-        .where(Document.project_id == project_id)
-        .order_by(Document.created_at.desc())
+        query.order_by(Document.created_at.desc())
         .limit(normalized_limit)
         .offset(normalized_offset)
     )
@@ -121,13 +122,17 @@ async def create_document_upload(
     project: Project,
     filename: str,
     file_size_bytes: int,
+    directory_key: str,
     storage: StorageService,
 ) -> tuple[Document, str, str]:
     validate_file_size(file_size_bytes)
+    if not is_valid_directory_key(directory_key):
+        raise _bad_request("Unsupported document directory")
     file_type, content_type = resolve_file_type_and_content_type(filename)
     document_id = uuid4()
     s3_key = build_document_s3_key(
         project_id=project.id,
+        directory_key=directory_key,
         document_id=document_id,
         filename=filename,
     )
@@ -138,8 +143,11 @@ async def create_document_upload(
         filename=normalize_filename(filename),
         file_type=file_type,
         s3_key=s3_key,
+        directory_key=directory_key,
         file_size_bytes=file_size_bytes,
-        parsing_status=DocumentParsingStatus.PENDING,
+        indexing_status=DocumentIndexingStatus.PENDING,
+        indexing_error=None,
+        indexed_at=None,
         created_at=datetime.now(timezone.utc),
     )
     upload_url = await storage.generate_presigned_upload_url(
@@ -202,37 +210,16 @@ async def delete_document(
         # TODO: enqueue retry/cleanup once background jobs exist.
 
 
-async def update_document_esg_category(
+async def move_document_to_directory(
     session: AsyncSession,
     *,
     document: Document,
-    esg_category: str | None,
+    directory_key: str,
 ) -> Document:
-    stripped = esg_category.strip() if esg_category else ""
-    normalized_category = stripped or None
-    result = await session.execute(
-        select(DocumentExtraction).where(DocumentExtraction.document_id == document.id)
-    )
-    extractions = list(result.scalars().all())
-
-    if extractions and normalized_category:
-        for extraction in extractions:
-            if extraction.review_status == ExtractionReviewStatus.IGNORED:
-                continue
-            extraction.corrected_esg_category = normalized_category
-            extraction.review_status = ExtractionReviewStatus.CORRECTED
-        recalculate_document_classification(document, extractions)
-    elif extractions and normalized_category is None:
-        for extraction in extractions:
-            extraction.corrected_esg_category = None
-            if extraction.review_status == ExtractionReviewStatus.CORRECTED:
-                extraction.review_status = ExtractionReviewStatus.PENDING
-        recalculate_document_classification(document, extractions)
-    else:
-        document.esg_category = normalized_category or None
-        if normalized_category is None:
-            document.classification_confidence = None
-
+    normalized_directory_key = directory_key.strip()
+    if not is_valid_directory_key(normalized_directory_key):
+        raise _bad_request("Unsupported document directory")
+    document.directory_key = normalized_directory_key
     await session.commit()
     await session.refresh(document)
     return document

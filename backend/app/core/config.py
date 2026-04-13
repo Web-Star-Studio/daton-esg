@@ -19,11 +19,14 @@ class Settings(BaseSettings):
     aws_secret_access_key: str = "test"
     aws_endpoint_url: str = "http://localstack:4566"
     s3_bucket_name: str = "worton-esg-development"
-    aws_textract_region: str | None = None
-    document_parsing_pdf_provider: str = "auto"
-    anthropic_api_key: SecretStr | None = None
-    classification_model: str = "claude-sonnet-4-6"
-    classification_temperature: float = 0.0
+    openai_api_key: SecretStr | None = None
+    openai_embedding_model: str = "text-embedding-3-small"
+    pinecone_api_key: SecretStr | None = None
+    pinecone_index_name: str | None = None
+    pinecone_index_host: str | None = None
+    rag_chunk_size_chars: int = 2000
+    rag_chunk_overlap_chars: int = 300
+    rag_tabular_rows_per_chunk: int = 25
     aws_cognito_region: str = "us-east-1"
     aws_cognito_user_pool_id: str = "us-east-1_example123"
     aws_cognito_app_client_id: str = "exampleclientid1234567890"
@@ -40,11 +43,6 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def derive_cognito_urls(self) -> "Settings":
-        self.aws_textract_region = (
-            self.aws_textract_region.strip()
-            if self.aws_textract_region and self.aws_textract_region.strip()
-            else self.aws_region
-        )
         issuer = (
             self.aws_cognito_issuer
             or f"https://cognito-idp.{self.aws_cognito_region}.amazonaws.com/"
@@ -54,6 +52,8 @@ class Settings(BaseSettings):
         self.aws_cognito_jwks_url = (
             self.aws_cognito_jwks_url or f"{issuer}/.well-known/jwks.json"
         )
+        if self.rag_chunk_overlap_chars >= self.rag_chunk_size_chars:
+            raise ValueError("rag_chunk_overlap_chars must be smaller than chunk size")
         return self
 
     @field_validator("database_url", mode="after")
@@ -108,6 +108,28 @@ class Settings(BaseSettings):
             )
         )
 
+    @field_validator("pinecone_index_name", "pinecone_index_host", mode="before")
+    @classmethod
+    def normalize_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    @field_validator("rag_chunk_size_chars", "rag_chunk_overlap_chars")
+    @classmethod
+    def validate_chunk_sizes(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("Chunk sizes must be greater than zero")
+        return value
+
+    @field_validator("rag_tabular_rows_per_chunk")
+    @classmethod
+    def validate_tabular_rows_per_chunk(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("Tabular rows per chunk must be greater than zero")
+        return value
+
     @staticmethod
     def is_container_environment() -> bool:
         return (
@@ -116,23 +138,6 @@ class Settings(BaseSettings):
             or os.getenv("DOCKER_CONTAINER") is not None
             or os.getenv("PODMAN_CONTAINER") is not None
         )
-
-    @field_validator("classification_temperature", mode="after")
-    @classmethod
-    def validate_classification_temperature(cls, value: float) -> float:
-        if not 0.0 <= value <= 1.0:
-            raise ValueError("classification_temperature must be between 0.0 and 1.0")
-        return value
-
-    @field_validator("document_parsing_pdf_provider", mode="after")
-    @classmethod
-    def validate_document_parsing_pdf_provider(cls, value: str) -> str:
-        normalized = value.strip().lower()
-        allowed_values = {"auto", "textract", "local"}
-        if normalized not in allowed_values:
-            allowed = ", ".join(sorted(allowed_values))
-            raise ValueError(f"document_parsing_pdf_provider must be one of: {allowed}")
-        return normalized
 
 
 @lru_cache
