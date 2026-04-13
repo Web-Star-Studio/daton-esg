@@ -59,12 +59,23 @@ class Settings(BaseSettings):
     @field_validator("database_url", mode="after")
     @classmethod
     def normalize_database_url(cls, value: str) -> str:
-        if cls.is_container_environment():
-            return value
-
         parsed = urlsplit(value)
-        if parsed.hostname != "postgres":
-            return value
+        scheme = parsed.scheme
+        if scheme in {"postgres", "postgresql", "postgresql+psycopg2"}:
+            scheme = "postgresql+asyncpg"
+        elif "+asyncpg" not in scheme:
+            scheme = "postgresql+asyncpg"
+
+        if cls.is_container_environment() or parsed.hostname != "postgres":
+            return urlunsplit(
+                (
+                    scheme,
+                    parsed.netloc,
+                    parsed.path,
+                    parsed.query,
+                    parsed.fragment,
+                )
+            )
 
         port = parsed.port or 5432
         credentials = ""
@@ -76,7 +87,7 @@ class Settings(BaseSettings):
 
         return urlunsplit(
             (
-                parsed.scheme,
+                scheme,
                 f"{credentials}localhost:{port}",
                 parsed.path,
                 parsed.query,
