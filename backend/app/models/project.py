@@ -69,6 +69,19 @@ class Project(Base):
     reports = relationship(
         "Report", back_populates="project", cascade="all, delete-orphan"
     )
+    agent_chat_threads = relationship(
+        "AgentChatThread",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+    agent_chat_messages = relationship(
+        "AgentChatMessage",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        primaryjoin="Project.id == AgentChatMessage.project_id",
+        foreign_keys="[AgentChatMessage.project_id]",
+        overlaps="thread,messages",
+    )
     rag_chunks = relationship(
         "DocumentRagChunk",
         cascade="all, delete-orphan",

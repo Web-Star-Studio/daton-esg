@@ -13,6 +13,9 @@ dependencies = [
   "boto3>=1.40,<2.0",
   "fastapi>=0.115,<1.0",
   "greenlet>=3.2,<4.0",
+  "langchain>=0.3.27,<0.4.0",
+  "langchain-openai>=0.3.35,<0.4.0",
+  "langgraph>=0.6.11,<0.7.0",
   "openai>=1.109.1,<2.0",
   "openpyxl>=3.1.5,<4.0",
   "pdfplumber>=0.11.7,<1.0",
@@ -44,3 +47,10 @@ line-length = 88
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/versions/20260413_0010_seed_reference_data.py" = ["E501"]
+"app/services/prompts/prompt_mestre.py" = ["E501"]
+"app/services/langgraph_report_graph.py" = ["E501"]
+"app/services/report_pipeline.py" = ["E501"]
+"alembic/versions/20260414_0011_*" = ["E501"]

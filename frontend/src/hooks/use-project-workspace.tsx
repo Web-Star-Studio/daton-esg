@@ -9,9 +9,12 @@ import type { ProjectRecord } from '../types/project'
 import type { PageAction, SidebarItemKey } from '../components/project-shell'
 
 export type ProjectWorkspaceContextValue = {
+  closeAgentDrawer: () => void
   currentProjectId: string
+  isAgentDrawerOpen: boolean
   isLoadingWorkspace: boolean
   navigateToProject: (projectId: string) => void
+  openAgentDrawer: () => void
   project: ProjectRecord | null
   projects: ProjectRecord[]
   setActiveSidebarKey: Dispatch<SetStateAction<SidebarItemKey>>

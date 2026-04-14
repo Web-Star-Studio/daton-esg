@@ -27,6 +27,23 @@ class Settings(BaseSettings):
     rag_chunk_size_chars: int = 2000
     rag_chunk_overlap_chars: int = 300
     rag_tabular_rows_per_chunk: int = 25
+    openai_chat_model: str = "gpt-4.1-mini"
+    openai_chat_temperature: float = 0.0
+    openai_chat_max_output_tokens: int = 1200
+    agent_chat_retrieval_top_k: int = 8
+    agent_chat_min_score: float = 0.35
+    agent_chat_history_limit: int = 12
+    agent_chat_system_prompt_version: str = "v1"
+    gri_reference_namespace: str = "__reference__gri-2021-pt"
+    gri_reference_top_k: int = 3
+    report_generation_model: str = "gpt-4.1-mini"
+    report_generation_temperature: float = 0.0
+    report_generation_max_output_tokens: int = 6000
+    report_rag_top_k: int = 10
+    report_min_section_ratio: float = 0.6
+    report_max_section_ratio: float = 1.4
+    report_phase1_max_concurrency: int = 5
+    report_agent_timeout_seconds: int = 120
     aws_cognito_region: str = "us-east-1"
     aws_cognito_user_pool_id: str = "us-east-1_example123"
     aws_cognito_app_client_id: str = "exampleclientid1234567890"
@@ -119,7 +136,13 @@ class Settings(BaseSettings):
             )
         )
 
-    @field_validator("pinecone_index_name", "pinecone_index_host", mode="before")
+    @field_validator(
+        "pinecone_index_name",
+        "pinecone_index_host",
+        "openai_chat_model",
+        "agent_chat_system_prompt_version",
+        mode="before",
+    )
     @classmethod
     def normalize_optional_text(cls, value: str | None) -> str | None:
         if value is None:
@@ -140,6 +163,51 @@ class Settings(BaseSettings):
         if value <= 0:
             raise ValueError("Tabular rows per chunk must be greater than zero")
         return value
+
+    @field_validator("openai_chat_temperature", "report_generation_temperature")
+    @classmethod
+    def validate_temperature(cls, value: float) -> float:
+        if not 0 <= value <= 1:
+            raise ValueError("Temperature must be between 0 and 1")
+        return value
+
+    @field_validator(
+        "openai_chat_max_output_tokens",
+        "agent_chat_retrieval_top_k",
+        "agent_chat_history_limit",
+        "report_generation_max_output_tokens",
+        "gri_reference_top_k",
+        "report_rag_top_k",
+        "report_phase1_max_concurrency",
+        "report_agent_timeout_seconds",
+    )
+    @classmethod
+    def validate_positive_chat_settings(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("Setting must be greater than zero")
+        return value
+
+    @field_validator("agent_chat_min_score")
+    @classmethod
+    def validate_agent_chat_min_score(cls, value: float) -> float:
+        if not 0 <= value <= 1:
+            raise ValueError("agent_chat_min_score must be between 0 and 1")
+        return value
+
+    @field_validator("report_min_section_ratio", "report_max_section_ratio")
+    @classmethod
+    def validate_section_ratio(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("Section ratio must be greater than zero")
+        return value
+
+    @model_validator(mode="after")
+    def validate_section_ratio_ordering(self) -> "Settings":
+        if self.report_min_section_ratio > self.report_max_section_ratio:
+            raise ValueError(
+                "report_min_section_ratio must be <= report_max_section_ratio"
+            )
+        return self
 
     @staticmethod
     def is_container_environment() -> bool:
