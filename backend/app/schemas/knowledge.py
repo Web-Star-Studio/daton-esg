@@ -32,6 +32,23 @@ class RetrievedKnowledgeChunk(BaseModel):
     metadata: dict[str, object] | list[object] | None
 
 
+class FrameworkReferenceChunk(BaseModel):
+    """A chunk of text retrieved from an external framework reference (e.g., the
+    consolidated GRI Standards PDF). These live in a dedicated Pinecone
+    namespace (``__reference__gri-...``) and MUST be treated as conceptual
+    framing, never as organization evidence.
+    """
+
+    framework: str
+    version: str
+    code: str | None
+    family: str | None
+    content: str
+    score: float
+    source: str | None = None
+    page: int | None = None
+
+
 class ProjectKnowledgeQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

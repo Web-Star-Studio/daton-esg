@@ -38,6 +38,12 @@ class DocumentIndexingStatus(StrEnum):
     FAILED = "failed"
 
 
+class AgentChatMessageRole(StrEnum):
+    USER = "user"
+    ASSISTANT = "assistant"
+    SYSTEM = "system"
+
+
 class ReportStatus(StrEnum):
     GENERATING = "generating"
     DRAFT = "draft"

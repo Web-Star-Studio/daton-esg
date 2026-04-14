@@ -7,7 +7,9 @@ import { ProjectWorkspaceLayout } from './components/project-workspace-layout'
 import { ProjectDetailPage } from './pages/project-detail-page'
 import { ProjectDocumentsPage } from './pages/project-documents-page'
 import { ProjectFormPage } from './pages/project-form-page'
+import { ProjectGenerationPage } from './pages/project-generation-page'
 import { ProjectIndicatorsPage } from './pages/project-indicators-page'
+import { ProjectMaterialityPage } from './pages/project-materiality-page'
 
 function FallbackRoute() {
   const { isAuthenticated, isLoading } = useAuth()
@@ -62,7 +64,9 @@ function App() {
           path="documents/:directoryKey"
           element={<ProjectDocumentsPage />}
         />
+        <Route path="generation" element={<ProjectGenerationPage />} />
         <Route path="indicators" element={<ProjectIndicatorsPage />} />
+        <Route path="materiality" element={<ProjectMaterialityPage />} />
       </Route>
       <Route path="*" element={<FallbackRoute />} />
     </Routes>

@@ -35,3 +35,7 @@ class User(Base):
     )
 
     projects = relationship("Project", back_populates="user")
+    agent_chat_messages = relationship(
+        "AgentChatMessage",
+        back_populates="user",
+    )

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import DocumentRagChunk
-from app.schemas.knowledge import RetrievedKnowledgeChunk
+from app.schemas.knowledge import FrameworkReferenceChunk, RetrievedKnowledgeChunk
 from app.services.embedding_service import EmbeddingService, get_embedding_service
 from app.services.vector_store import VectorStore, get_vector_store
 
@@ -72,6 +73,58 @@ async def retrieve_project_context(
                 source_type=row.source_type,
                 source_locator=row.source_locator,
                 metadata=row.metadata_payload,
+            )
+        )
+    return results
+
+
+async def retrieve_framework_reference(
+    *,
+    query: str,
+    namespace: str,
+    top_k: int = 3,
+    metadata_filter: dict[str, Any] | None = None,
+    embedding_service: EmbeddingService | None = None,
+    vector_store: VectorStore | None = None,
+) -> list[FrameworkReferenceChunk]:
+    """Retrieve framework reference chunks (e.g., GRI Standards) from a shared
+    Pinecone namespace. Unlike ``retrieve_project_context``, this does not join
+    back to any DB table — framework content lives in Pinecone metadata.
+
+    The caller is responsible for presenting the returned chunks to the LLM as
+    conceptual framing, not as organization evidence.
+    """
+    if not namespace.startswith("__reference__"):
+        raise ValueError(
+            "retrieve_framework_reference refuses non-reference namespaces"
+        )
+    current_embedding_service = embedding_service or get_embedding_service()
+    current_vector_store = vector_store or get_vector_store()
+    vector = await current_embedding_service.embed_query(query)
+    matches = await current_vector_store.query(
+        namespace=namespace,
+        vector=vector,
+        top_k=top_k,
+        metadata_filter=metadata_filter,
+    )
+    results: list[FrameworkReferenceChunk] = []
+    for match in matches:
+        metadata = dict(match.metadata or {})
+        content = str(metadata.get("content") or "").strip()
+        if not content:
+            continue
+        page_value = metadata.get("page")
+        page = int(page_value) if isinstance(page_value, (int, float)) and page_value else None
+        results.append(
+            FrameworkReferenceChunk(
+                framework=str(metadata.get("framework") or ""),
+                version=str(metadata.get("version") or ""),
+                code=str(metadata.get("code") or "") or None,
+                family=str(metadata.get("family") or "") or None,
+                content=content,
+                score=match.score,
+                source=str(metadata.get("source") or "") or None,
+                page=page,
             )
         )
     return results

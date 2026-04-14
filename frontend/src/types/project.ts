@@ -1,3 +1,19 @@
+export type MaterialTopicPillar = 'E' | 'S' | 'G'
+
+export type MaterialTopic = {
+  pillar: MaterialTopicPillar
+  topic: string
+  priority: number
+}
+
+export type SdgSelection = {
+  ods_number: number
+  objetivo: string
+  acao: string
+  indicador: string
+  resultado: string
+}
+
 export type ProjectRecord = {
   id: string
   org_name: string
@@ -7,8 +23,8 @@ export type ProjectRecord = {
   base_year: number
   scope: string | null
   status: string
-  material_topics: Record<string, unknown> | Array<unknown> | null
-  sdg_goals: Record<string, unknown> | Array<unknown> | null
+  material_topics: MaterialTopic[] | Record<string, unknown> | null
+  sdg_goals: SdgSelection[] | Record<string, unknown> | null
   created_at: string
   updated_at: string
 }
@@ -23,9 +39,87 @@ export type ProjectCreateInput = {
 }
 
 export type ProjectUpdateInput = Partial<ProjectCreateInput> & {
-  material_topics?: Record<string, unknown> | Array<unknown> | null
-  sdg_goals?: Record<string, unknown> | Array<unknown> | null
+  material_topics?: MaterialTopic[] | null
+  sdg_goals?: SdgSelection[] | null
   status?: string
+}
+
+export type GriStandardRecord = {
+  code: string
+  family: string
+  standard_text: string
+}
+
+export type OdsMetaRecord = {
+  meta_code: string
+  meta_text: string
+}
+
+export type OdsGoalRecord = {
+  ods_number: number
+  objetivo: string
+  metas: OdsMetaRecord[]
+}
+
+export type IndicatorTemplateRecord = {
+  tema: string
+  indicador: string
+  unidade: string
+}
+
+export type ReportStatus = 'generating' | 'draft' | 'reviewed' | 'exported'
+
+export type ReportSection = {
+  key: string
+  title: string
+  order: number
+  heading_level: number
+  content: string
+  gri_codes_used: string[]
+  word_count: number
+  status: 'completed' | 'sparse_data' | 'failed'
+}
+
+export type GriIndexEntry = {
+  code: string
+  family: string
+  standard_text: string
+  evidence_excerpt: string | null
+  section_ref: string | null
+  status: 'atendido' | 'parcial' | 'nao_atendido'
+  found_in_text: boolean
+}
+
+export type ReportGap = {
+  section_key: string | null
+  category: string
+  detail: string
+}
+
+export type ReportListItem = {
+  id: string
+  project_id: string
+  version: number
+  status: ReportStatus
+  created_at: string
+  updated_at: string
+}
+
+export type ReportRecord = {
+  id: string
+  project_id: string
+  version: number
+  status: ReportStatus
+  sections: ReportSection[] | null
+  gri_index: GriIndexEntry[] | null
+  gaps: ReportGap[] | null
+  indicators: unknown
+  charts: unknown
+  exported_docx_s3: string | null
+  exported_pdf_s3: string | null
+  llm_tokens_used: number | null
+  created_at: string
+  updated_at: string
 }
 
 export type ProjectShellOption = {
@@ -79,4 +173,37 @@ export type ProjectKnowledgeStatus = {
 export type ProjectKnowledgeReindexResponse = {
   project_id: string
   queued_documents: number
+}
+
+export type ProjectGenerationCitation = {
+  document_id: string | null
+  filename: string
+  directory_key: string | null
+  chunk_index: number
+  source_type: string
+  score: number
+  snippet: string
+}
+
+export type ProjectGenerationMessage = {
+  id: string
+  thread_id: string
+  project_id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  citations: ProjectGenerationCitation[]
+  created_at: string
+}
+
+export type ProjectGenerationThread = {
+  id: string
+  project_id: string
+  title: string
+  created_at: string
+  updated_at: string
+}
+
+export type ProjectGenerationThreadDetail = {
+  thread: ProjectGenerationThread
+  messages: ProjectGenerationMessage[]
 }

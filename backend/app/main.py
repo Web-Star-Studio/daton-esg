@@ -5,9 +5,12 @@ from fastapi import FastAPI
 
 from app.api.auth import router as auth_router
 from app.api.documents import router as documents_router
+from app.api.generation import router as generation_router
 from app.api.health import router as health_router
 from app.api.knowledge import router as knowledge_router
 from app.api.projects import router as projects_router
+from app.api.reference_data import router as reference_data_router
+from app.api.reports import router as reports_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 
@@ -33,9 +36,12 @@ def create_app() -> FastAPI:
     )
     app.include_router(auth_router)
     app.include_router(documents_router)
+    app.include_router(generation_router)
     app.include_router(health_router)
     app.include_router(knowledge_router)
     app.include_router(projects_router)
+    app.include_router(reference_data_router)
+    app.include_router(reports_router)
 
     @app.get("/")
     async def root() -> dict[str, str]:

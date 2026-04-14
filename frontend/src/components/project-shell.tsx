@@ -44,7 +44,11 @@ type ProjectShellProps = {
   currentProjectId?: string
   overviewHref?: string
   documentsHref?: string
+  generationHref?: string
   indicatorsHref?: string
+  materialityHref?: string
+  isAgentOpen?: boolean
+  onOpenAgent?: () => void
   pageActions?: PageAction[]
   pageTitle: string
   projectOptions?: ProjectShellOption[]
@@ -96,7 +100,9 @@ function getSidebarHref(
   itemKey: SidebarItemKey,
   links: {
     documentsHref?: string
+    generationHref?: string
     indicatorsHref?: string
+    materialityHref?: string
     overviewHref?: string
   }
 ) {
@@ -112,6 +118,14 @@ function getSidebarHref(
     return links.documentsHref
   }
 
+  if (itemKey === 'generation') {
+    return links.generationHref
+  }
+
+  if (itemKey === 'materiality') {
+    return links.materialityHref
+  }
+
   return undefined
 }
 
@@ -122,7 +136,11 @@ export function ProjectShell({
   currentProjectId,
   overviewHref,
   documentsHref,
+  generationHref,
   indicatorsHref,
+  materialityHref,
+  isAgentOpen = false,
+  onOpenAgent,
   pageActions = [],
   pageTitle,
   projectOptions = [],
@@ -405,6 +423,32 @@ export function ProjectShell({
                 </PrimaryBtn>
               )
             })}
+            {onOpenAgent ? (
+              <button
+                type="button"
+                onClick={onOpenAgent}
+                aria-label="Abrir agente"
+                aria-pressed={isAgentOpen}
+                className={`apple-focus-ring inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[12px] font-medium tracking-[-0.01em] transition-colors ${
+                  isAgentOpen
+                    ? 'border-[#0f1923] bg-[#0f1923] text-white'
+                    : 'border-black/10 bg-white text-[#1d1d1f] hover:border-black/20 hover:bg-black/[0.03]'
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className="material-symbols-outlined text-[16px]"
+                  style={
+                    isAgentOpen
+                      ? { fontVariationSettings: "'FILL' 1" }
+                      : undefined
+                  }
+                >
+                  smart_toy
+                </span>
+                Agente
+              </button>
+            ) : null}
             <button
               type="button"
               className="apple-focus-ring inline-flex size-8 items-center justify-center text-[#86868b] transition-colors hover:text-[#1d1d1f]"
@@ -465,7 +509,9 @@ export function ProjectShell({
                 const isActive = item.key === activeSidebarKey
                 const href = getSidebarHref(item.key, {
                   documentsHref,
+                  generationHref,
                   indicatorsHref,
+                  materialityHref,
                   overviewHref,
                 })
                 const commonProps = {

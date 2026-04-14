@@ -91,6 +91,39 @@ class StorageService:
     async def get_object_bytes(self, *, key: str) -> bytes:
         return await asyncio.to_thread(self._get_object_bytes, key=key)
 
+    def _put_object(self, *, key: str, body: bytes, content_type: str) -> None:
+        self._client.put_object(
+            Bucket=self.bucket_name,
+            Key=key,
+            Body=body,
+            ContentType=content_type,
+        )
+
+    def _generate_presigned_download_url(
+        self, *, key: str, expires_in_seconds: int = 3600
+    ) -> str:
+        return self._client.generate_presigned_url(
+            ClientMethod="get_object",
+            Params={"Bucket": self.bucket_name, "Key": key},
+            ExpiresIn=expires_in_seconds,
+        )
+
+    async def put_object(
+        self, *, key: str, body: bytes, content_type: str
+    ) -> None:
+        await asyncio.to_thread(
+            self._put_object, key=key, body=body, content_type=content_type
+        )
+
+    async def generate_presigned_download_url(
+        self, *, key: str, expires_in_seconds: int = 3600
+    ) -> str:
+        return await asyncio.to_thread(
+            self._generate_presigned_download_url,
+            key=key,
+            expires_in_seconds=expires_in_seconds,
+        )
+
 
 @cache
 def get_storage_service() -> StorageService:

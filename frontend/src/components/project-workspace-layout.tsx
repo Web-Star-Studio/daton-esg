@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { fetchProject, fetchProjects } from '../services/api-client'
 import type { ProjectRecord, ProjectShellOption } from '../types/project'
+import { AgentDrawer } from './agent-drawer'
 import {
   ProjectShell,
   type PageAction,
@@ -22,10 +23,24 @@ function getRouteShellDefaults(pathname: string): {
     }
   }
 
+  if (pathname.endsWith('/generation')) {
+    return {
+      activeSidebarKey: 'generation',
+      pageTitle: 'Geração do Relatório',
+    }
+  }
+
   if (pathname.endsWith('/indicators')) {
     return {
       activeSidebarKey: 'indicators',
       pageTitle: 'Indicadores',
+    }
+  }
+
+  if (pathname.endsWith('/materiality')) {
+    return {
+      activeSidebarKey: 'materiality',
+      pageTitle: 'Materialidade & ODS',
     }
   }
 
@@ -52,6 +67,15 @@ export function ProjectWorkspaceLayout() {
   const [activeSidebarKey, setActiveSidebarKey] = useState<SidebarItemKey>(
     routeDefaults.activeSidebarKey
   )
+  const [isAgentDrawerOpen, setIsAgentDrawerOpen] = useState(false)
+
+  const openAgentDrawer = useCallback(() => {
+    setIsAgentDrawerOpen(true)
+  }, [])
+
+  const closeAgentDrawer = useCallback(() => {
+    setIsAgentDrawerOpen(false)
+  }, [])
 
   useEffect(() => {
     setPageTitle(routeDefaults.pageTitle)
@@ -146,9 +170,12 @@ export function ProjectWorkspaceLayout() {
   return (
     <ProjectWorkspaceContext.Provider
       value={{
+        closeAgentDrawer,
         currentProjectId: projectId ?? '',
+        isAgentDrawerOpen,
         isLoadingWorkspace,
         navigateToProject,
+        openAgentDrawer,
         project,
         projects,
         setActiveSidebarKey,
@@ -165,9 +192,17 @@ export function ProjectWorkspaceLayout() {
         documentsHref={
           projectId ? `/projects/${projectId}/documents` : undefined
         }
+        generationHref={
+          projectId ? `/projects/${projectId}/generation` : undefined
+        }
         indicatorsHref={
           projectId ? `/projects/${projectId}/indicators` : undefined
         }
+        materialityHref={
+          projectId ? `/projects/${projectId}/materiality` : undefined
+        }
+        isAgentOpen={isAgentDrawerOpen}
+        onOpenAgent={openAgentDrawer}
         overviewHref={projectId ? `/projects/${projectId}` : undefined}
         pageActions={pageActions}
         pageTitle={pageTitle}
@@ -175,6 +210,14 @@ export function ProjectWorkspaceLayout() {
       >
         <Outlet />
       </ProjectShell>
+      <AgentDrawer
+        currentProjectId={projectId ?? ''}
+        isLoadingWorkspace={isLoadingWorkspace}
+        isOpen={isAgentDrawerOpen}
+        onClose={closeAgentDrawer}
+        project={project}
+        workspaceError={workspaceError}
+      />
     </ProjectWorkspaceContext.Provider>
   )
 }

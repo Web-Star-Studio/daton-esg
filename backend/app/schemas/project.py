@@ -1,10 +1,36 @@
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.enums import OrganizationSize, ProjectStatus
+
+
+class MaterialTopic(BaseModel):
+    """One selected material topic with its ESG pillar and consultant-assigned priority."""
+
+    pillar: Literal["E", "S", "G"]
+    topic: str = Field(min_length=1, max_length=255)
+    priority: int = Field(ge=1, le=5)
+
+    @field_validator("topic")
+    @classmethod
+    def normalize_topic(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("topic cannot be blank")
+        return normalized
+
+
+class SdgSelection(BaseModel):
+    """One selected SDG with optional consultant narrative about the org's alignment."""
+
+    ods_number: int = Field(ge=1, le=17)
+    objetivo: str
+    acao: str = ""
+    indicador: str = ""
+    resultado: str = ""
 
 
 def _normalize_optional_text(value: str | None) -> str | None:
@@ -53,8 +79,8 @@ class ProjectUpdate(BaseModel):
     base_year: int | None = Field(default=None, ge=1900)
     scope: str | None = None
     status: ProjectStatus | None = None
-    material_topics: dict[str, Any] | list[Any] | None = None
-    sdg_goals: dict[str, Any] | list[Any] | None = None
+    material_topics: list[MaterialTopic] | None = None
+    sdg_goals: list[SdgSelection] | None = None
 
     @field_validator("org_name")
     @classmethod
