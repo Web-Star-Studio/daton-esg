@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Project
 from app.models.enums import ProjectStatus
 from app.schemas.project import ProjectCreate, ProjectUpdate
+from app.services.storage_service import get_storage_service
+from app.services.vector_store import get_vector_store
 
 logger = logging.getLogger(__name__)
 
@@ -117,8 +119,6 @@ async def delete_project_cascade(
 
     # 1. Wipe Pinecone namespace (all indexed vectors for this project)
     try:
-        from app.services.vector_store import get_vector_store
-
         store = get_vector_store()
         await store.delete_namespace(namespace=project_id)
         logger.info(
@@ -133,8 +133,6 @@ async def delete_project_cascade(
 
     # 2. Delete S3 objects (documents + report exports)
     try:
-        from app.services.storage_service import get_storage_service
-
         storage = get_storage_service()
         doc_prefix = f"projects/{project_id}/"
         report_prefix = f"reports/{project_id}/"

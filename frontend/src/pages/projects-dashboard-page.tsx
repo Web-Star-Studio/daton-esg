@@ -6,7 +6,7 @@ import { useAuth } from '../hooks/use-auth'
 import { PrimaryBtn } from '../components/primary-btn'
 import { ProjectStatusBadge } from '../components/project-status-badge'
 import {
-  archiveProject,
+  deleteProject,
   createProject,
   fetchProjects,
 } from '../services/api-client'
@@ -191,7 +191,7 @@ export function ProjectsDashboardPage() {
     setDeletingId(projectId)
     setPageError(null)
     try {
-      await archiveProject(projectId)
+      await deleteProject(projectId)
       setProjects((current) =>
         current.filter((project) => project.id !== projectId)
       )

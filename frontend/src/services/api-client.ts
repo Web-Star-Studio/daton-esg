@@ -158,7 +158,7 @@ export async function updateProject(
   return (await response.json()) as ProjectRecord
 }
 
-export async function archiveProject(projectId: string) {
+export async function deleteProject(projectId: string) {
   const response = await apiFetch(`/api/v1/projects/${projectId}`, {
     method: 'DELETE',
   })
@@ -166,10 +166,13 @@ export async function archiveProject(projectId: string) {
   if (!response.ok) {
     throw await parseApiError(
       response,
-      `Falha ao arquivar o projeto (${response.status}).`
+      `Falha ao excluir o projeto (${response.status}).`
     )
   }
 }
+
+/** @deprecated Use deleteProject instead. */
+export const archiveProject = deleteProject
 
 export async function fetchProjectDocuments(
   projectId: string,

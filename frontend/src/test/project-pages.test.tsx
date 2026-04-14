@@ -21,7 +21,7 @@ vi.mock('../hooks/use-auth', () => ({
 }))
 
 vi.mock('../services/api-client', () => ({
-  archiveProject: vi.fn(),
+  deleteProject: vi.fn(),
   confirmProjectDocumentUpload: vi.fn(),
   createProject: vi.fn(),
   createProjectDocumentUpload: vi.fn(),
