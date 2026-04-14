@@ -664,14 +664,42 @@ async def _run_report_pipeline_inner(
     ]
     prior_summary = "\n".join(prior_summary_lines[-12:])
 
-    # --- Phase 2: sequential ---
+    # --- Phase 2: sequential (with same timeout as Phase 1) ---
     for template in templates_phase2:
-        result = await run_single_agent(
-            template=template,
-            ctx=ctx,
-            prior_sections_summary=prior_summary,
-            event_queue=event_queue,
-        )
+        try:
+            result = await asyncio.wait_for(
+                run_single_agent(
+                    template=template,
+                    ctx=ctx,
+                    prior_sections_summary=prior_summary,
+                    event_queue=event_queue,
+                ),
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "report.agent_timeout",
+                extra={"section": template.key, "phase": 2},
+            )
+            result = AgentResult(
+                section_payload={
+                    "key": template.key,
+                    "title": template.title,
+                    "order": template.order,
+                    "heading_level": template.heading_level,
+                    "content": "",
+                    "gri_codes_used": [],
+                    "word_count": 0,
+                    "status": "failed",
+                },
+                gaps=[
+                    {
+                        "section_key": template.key,
+                        "category": "generation_error",
+                        "detail": f"agente excedeu timeout de {timeout}s",
+                    }
+                ],
+            )
         all_sections.append(result.section_payload)
         all_gaps.extend(result.gaps)
         for entry in result.evidence_entries:

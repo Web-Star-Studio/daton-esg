@@ -85,7 +85,9 @@ function GriIndexTable({ entries }: { entries: GriIndexEntry[] | null }) {
 
   const families = Object.keys(grouped).sort((a, b) => {
     const order = ['2', '3', '200', '300', '400']
-    return order.indexOf(a) - order.indexOf(b) || a.localeCompare(b)
+    const rankA = order.indexOf(a) === -1 ? order.length : order.indexOf(a)
+    const rankB = order.indexOf(b) === -1 ? order.length : order.indexOf(b)
+    return rankA - rankB || a.localeCompare(b)
   })
 
   return (

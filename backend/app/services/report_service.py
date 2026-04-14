@@ -246,7 +246,21 @@ async def stream_report_generation(
 
     try:
         while True:
-            event = await event_queue.get()
+            q_get: asyncio.Task[SSEEvent | None] = asyncio.create_task(
+                event_queue.get()
+            )
+            done, _pending = await asyncio.wait(
+                {q_get, pipeline_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            # If the pipeline crashed without enqueuing None, detect it here.
+            if pipeline_task in done and q_get not in done:
+                q_get.cancel()
+                exc = pipeline_task.exception()
+                if exc:
+                    raise exc
+                break
+            event = q_get.result()
             if event is None:
                 break
             yield _sse_event(event.event_type, event.data)

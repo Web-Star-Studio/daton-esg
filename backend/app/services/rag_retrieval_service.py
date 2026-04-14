@@ -116,7 +116,7 @@ async def retrieve_framework_reference(
         page_value = metadata.get("page")
         page = (
             int(page_value)
-            if isinstance(page_value, (int, float)) and page_value
+            if isinstance(page_value, (int, float)) and page_value is not None
             else None
         )
         results.append(

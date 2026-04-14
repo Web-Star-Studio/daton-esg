@@ -108,7 +108,7 @@ const sampleReport = {
   gaps: [
     {
       section_key: 'gestao-ambiental',
-      category: 'sparse_evidence',
+      category: 'sparse_evidence' as const,
       detail: 'seção abaixo do alvo',
     },
   ],

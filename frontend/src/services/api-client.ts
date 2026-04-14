@@ -619,7 +619,8 @@ export async function updateReportSection(
 
 export async function exportReportDocx(projectId: string, reportId: string) {
   const response = await apiFetch(
-    `/api/v1/projects/${projectId}/reports/${reportId}/export/docx`
+    `/api/v1/projects/${projectId}/reports/${reportId}/export/docx`,
+    { method: 'POST' }
   )
   if (!response.ok) {
     throw await parseApiError(

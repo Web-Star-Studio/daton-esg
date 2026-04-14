@@ -164,22 +164,27 @@ class Settings(BaseSettings):
             raise ValueError("Tabular rows per chunk must be greater than zero")
         return value
 
-    @field_validator("openai_chat_temperature")
+    @field_validator("openai_chat_temperature", "report_generation_temperature")
     @classmethod
     def validate_temperature(cls, value: float) -> float:
         if not 0 <= value <= 1:
-            raise ValueError("openai_chat_temperature must be between 0 and 1")
+            raise ValueError("Temperature must be between 0 and 1")
         return value
 
     @field_validator(
         "openai_chat_max_output_tokens",
         "agent_chat_retrieval_top_k",
         "agent_chat_history_limit",
+        "report_generation_max_output_tokens",
+        "gri_reference_top_k",
+        "report_rag_top_k",
+        "report_phase1_max_concurrency",
+        "report_agent_timeout_seconds",
     )
     @classmethod
     def validate_positive_chat_settings(cls, value: int) -> int:
         if value <= 0:
-            raise ValueError("Chat settings must be greater than zero")
+            raise ValueError("Setting must be greater than zero")
         return value
 
     @field_validator("agent_chat_min_score")
@@ -188,6 +193,21 @@ class Settings(BaseSettings):
         if not 0 <= value <= 1:
             raise ValueError("agent_chat_min_score must be between 0 and 1")
         return value
+
+    @field_validator("report_min_section_ratio", "report_max_section_ratio")
+    @classmethod
+    def validate_section_ratio(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("Section ratio must be greater than zero")
+        return value
+
+    @model_validator(mode="after")
+    def validate_section_ratio_ordering(self) -> "Settings":
+        if self.report_min_section_ratio > self.report_max_section_ratio:
+            raise ValueError(
+                "report_min_section_ratio must be <= report_max_section_ratio"
+            )
+        return self
 
     @staticmethod
     def is_container_environment() -> bool:

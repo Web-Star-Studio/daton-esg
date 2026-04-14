@@ -524,11 +524,18 @@ export function AgentDrawer({
     }
   }
 
+  const streamRequestIdRef = useRef(0)
+
   async function handleSendMessage() {
     const content = composerValue.trim()
     if (!currentProjectId || !activeThreadId || !content || isSending) {
       return
     }
+
+    const requestId = ++streamRequestIdRef.current
+    const snapshotProjectId = currentProjectId
+    const snapshotThreadId = activeThreadId
+    const isStale = () => streamRequestIdRef.current !== requestId
 
     setIsSending(true)
     setPanelError(null)
@@ -538,11 +545,12 @@ export function AgentDrawer({
 
     try {
       await streamProjectGenerationMessage(
-        currentProjectId,
-        activeThreadId,
+        snapshotProjectId,
+        snapshotThreadId,
         { content },
         {
           onThread: (thread) => {
+            if (isStale()) return
             startTransition(() => {
               setThreads((currentThreads) => {
                 const hasThread = currentThreads.some(
@@ -561,11 +569,13 @@ export function AgentDrawer({
             })
           },
           onUserMessage: (message) => {
+            if (isStale()) return
             startTransition(() => {
               setMessages((currentMessages) => [...currentMessages, message])
             })
           },
           onToken: (text) => {
+            if (isStale()) return
             startTransition(() => {
               setStreamingAssistantContent(
                 (currentContent) => currentContent + text
@@ -573,6 +583,7 @@ export function AgentDrawer({
             })
           },
           onAssistantMessage: (message) => {
+            if (isStale()) return
             startTransition(() => {
               setStreamingAssistantContent('')
               setStreamingStartedAt(null)
@@ -580,11 +591,13 @@ export function AgentDrawer({
             })
           },
           onError: (message) => {
+            if (isStale()) return
             setStreamingAssistantContent('')
             setStreamingStartedAt(null)
             setPanelError(message)
           },
           onDone: () => {
+            if (isStale()) return
             setStreamingAssistantContent('')
             setStreamingStartedAt(null)
           },

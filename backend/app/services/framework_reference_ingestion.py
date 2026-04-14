@@ -33,9 +33,11 @@ logger = logging.getLogger(__name__)
 
 # Disclosure heading patterns in the consolidated GRI PDF. The PDF uses
 # "Conteúdo X-Y <title>" as the canonical heading for each disclosure.
-# Also matches bare "305-1" at line start and "GRI X-Y".
+# Requires an explicit prefix (Conteúdo / Conteudo / GRI) to avoid false
+# positives on date/version-like strings. The caller must always provide
+# ``valid_codes`` to further restrict matches.
 _CODE_ANCHOR_PATTERN = re.compile(
-    r"(?m)^\s*(?:Conte[úu]do|Conteudo|GRI)?\s*(\d{1,3})-(\d+[a-z]?)\b",
+    r"(?m)^\s*(?:Conte[úu]do|Conteudo|GRI)\s+(\d{1,3})-(\d+[a-z]?)\b",
     re.IGNORECASE,
 )
 

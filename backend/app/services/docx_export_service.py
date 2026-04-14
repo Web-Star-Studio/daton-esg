@@ -251,18 +251,19 @@ def generate_report_docx(report: Report, project: Project) -> bytes:
     gri_index_raw = report.gri_index
     gri_index = gri_index_raw if isinstance(gri_index_raw, list) else None
 
-    for section in ordered:
+    for idx, section in enumerate(ordered):
         key = section.get("key")
         title = section.get("title", "")
         level = min(3, max(1, int(section.get("heading_level", 1) or 1)))
         document.add_heading(title, level=level)
         if key == "sumario-gri" and gri_index:
-            # render the structured table rather than the embedded markdown
             _render_sumario_gri_table(document, gri_index)
         else:
             content = str(section.get("content", "") or "")
             _render_section_content(document, content)
-        document.add_page_break()
+        # page break between sections, not after the last one
+        if idx < len(ordered) - 1:
+            document.add_page_break()
 
     buffer = io.BytesIO()
     document.save(buffer)

@@ -74,6 +74,30 @@ export type ReportStatus =
   | 'reviewed'
   | 'exported'
 
+export type ReportSectionAudit = {
+  agent_name: string
+  section_key: string
+  system_prompt_hash: string
+  system_prompt_length: number
+  user_prompt_length: number
+  rag_chunks_received: Array<{
+    filename: string
+    directory_key: string
+    score: number
+  }>
+  reference_chunks_received: Array<{ code: string | null; score: number }>
+  gri_codes_assigned: string[]
+  gri_codes_produced: string[]
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+  latency_ms: number
+  model_id: string
+  temperature: number
+  started_at: string
+  completed_at: string
+}
+
 export type ReportSection = {
   key: string
   title: string
@@ -83,6 +107,7 @@ export type ReportSection = {
   gri_codes_used: string[]
   word_count: number
   status: 'completed' | 'sparse_data' | 'failed'
+  audit?: ReportSectionAudit | null
 }
 
 export type GriIndexEntry = {
@@ -95,9 +120,17 @@ export type GriIndexEntry = {
   found_in_text: boolean
 }
 
+export type ReportGapCategory =
+  | 'forbidden_term'
+  | 'sparse_evidence'
+  | 'missing_enquadramento'
+  | 'missing_gri_code'
+  | 'controlled_term_flag'
+  | 'generation_error'
+
 export type ReportGap = {
   section_key: string | null
-  category: string
+  category: ReportGapCategory
   detail: string
 }
 

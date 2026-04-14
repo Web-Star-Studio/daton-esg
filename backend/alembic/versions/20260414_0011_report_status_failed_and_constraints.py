@@ -11,15 +11,15 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # 1. Clean up any stuck GENERATING reports (older than 1 hour)
-    # (FAILED enum value was added in 0011a)
+    # 1. Clean up stuck GENERATING reports older than 1 hour (by updated_at).
+    #    FAILED enum value was added in the prior migration 0011a.
     op.execute(
         "UPDATE reports SET status = 'failed' "
         "WHERE status = 'generating' "
         "AND updated_at < now() - interval '1 hour'"
     )
 
-    # 3. Precheck: abort if duplicate (project_id, version) rows exist
+    # 2. Precheck: abort if duplicate (project_id, version) rows exist
     bind = op.get_bind()
     dupes = bind.execute(
         sa.text(
@@ -36,7 +36,7 @@ def upgrade() -> None:
             f"re-running migration."
         )
 
-    # 4. Precheck: abort if multiple GENERATING reports per project
+    # 3. Precheck: abort if multiple GENERATING reports per project
     multi_gen = bind.execute(
         sa.text(
             "SELECT project_id, count(*) "
@@ -53,14 +53,14 @@ def upgrade() -> None:
             f"re-running migration."
         )
 
-    # 5. Add unique constraint on (project_id, version)
+    # 4. Add unique constraint on (project_id, version)
     op.create_unique_constraint(
         "uq_reports_project_version",
         "reports",
         ["project_id", "version"],
     )
 
-    # 6. Add partial unique index: at most one GENERATING per project
+    # 5. Add partial unique index: at most one GENERATING per project
     op.execute(
         "CREATE UNIQUE INDEX ix_reports_one_generating_per_project "
         "ON reports (project_id) "

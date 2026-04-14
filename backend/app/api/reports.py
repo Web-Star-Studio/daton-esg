@@ -84,13 +84,14 @@ async def generate_report(
     )
 
 
-@router.get("/{report_id}/export/docx")
+@router.post("/{report_id}/export/docx")
 async def export_docx(
     project_id: UUID,
     report_id: UUID,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, str]:
+    """Generate the DOCX, upload to S3, return a presigned download URL."""
     project = await get_project_for_user(session, project_id, current_user.id)
     report = await get_report_detail(
         session, project_id=project.id, report_id=report_id
@@ -104,6 +105,23 @@ async def export_docx(
             status_code=status.HTTP_409_CONFLICT, detail=str(exc)
         ) from exc
     return {"download_url": download_url}
+
+
+@router.get("/{report_id}/export/docx")
+async def get_export_docx_url(
+    project_id: UUID,
+    report_id: UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, str | None]:
+    """Return the existing export URL if available, without side effects."""
+    project = await get_project_for_user(session, project_id, current_user.id)
+    report = await get_report_detail(
+        session, project_id=project.id, report_id=report_id
+    )
+    if report is None:
+        raise HTTPException(status_code=404, detail="Relatório não encontrado.")
+    return {"download_url": report.exported_docx_s3}
 
 
 @router.patch(
