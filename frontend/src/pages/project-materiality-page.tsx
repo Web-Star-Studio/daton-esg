@@ -27,7 +27,7 @@ const PILLAR_LABELS: Record<MaterialTopicPillar, string> = {
 const TEMA_TO_PILLAR: Record<string, MaterialTopicPillar> = {
   'Clima e Energia': 'E',
   Água: 'E',
-  'Resíduos': 'E',
+  Resíduos: 'E',
   'Capital Humano': 'S',
   'Saúde e Segurança do Trabalho': 'S',
   'Desempenho Econômico': 'G',
@@ -163,27 +163,26 @@ export function ProjectMaterialityPage() {
     setSdgSelections(normalizeSdgGoals(project.sdg_goals))
   }, [project])
 
-  const pillarTopics = useMemo<Record<MaterialTopicPillar, PillarTopic[]>>(
-    () => {
-      const grouped: Record<MaterialTopicPillar, PillarTopic[]> = {
-        E: [],
-        S: [],
-        G: [],
+  const pillarTopics = useMemo<
+    Record<MaterialTopicPillar, PillarTopic[]>
+  >(() => {
+    const grouped: Record<MaterialTopicPillar, PillarTopic[]> = {
+      E: [],
+      S: [],
+      G: [],
+    }
+    for (const template of indicatorTemplates) {
+      const pillar = TEMA_TO_PILLAR[template.tema]
+      if (!pillar) continue
+      const already = grouped[pillar].some(
+        (entry) => entry.topic === template.tema
+      )
+      if (!already) {
+        grouped[pillar].push({ pillar, topic: template.tema })
       }
-      for (const template of indicatorTemplates) {
-        const pillar = TEMA_TO_PILLAR[template.tema]
-        if (!pillar) continue
-        const already = grouped[pillar].some(
-          (entry) => entry.topic === template.tema
-        )
-        if (!already) {
-          grouped[pillar].push({ pillar, topic: template.tema })
-        }
-      }
-      return grouped
-    },
-    [indicatorTemplates]
-  )
+    }
+    return grouped
+  }, [indicatorTemplates])
 
   function isTopicSelected(pillar: MaterialTopicPillar, topic: string) {
     return topicSelections.some(
@@ -195,7 +194,8 @@ export function ProjectMaterialityPage() {
     setTopicSelections((current) => {
       if (
         current.some(
-          (selection) => selection.pillar === pillar && selection.topic === topic
+          (selection) =>
+            selection.pillar === pillar && selection.topic === topic
         )
       ) {
         return current.filter(
@@ -227,7 +227,9 @@ export function ProjectMaterialityPage() {
 
   function toggleSdg(goal: OdsGoalRecord) {
     setSdgSelections((current) => {
-      if (current.some((selection) => selection.ods_number === goal.ods_number)) {
+      if (
+        current.some((selection) => selection.ods_number === goal.ods_number)
+      ) {
         return current.filter(
           (selection) => selection.ods_number !== goal.ods_number
         )
@@ -266,8 +268,8 @@ export function ProjectMaterialityPage() {
     setSaveMessage(null)
     try {
       const updated = await updateProject(currentProjectId, {
-        material_topics: topicSelections,
-        sdg_goals: sdgSelections,
+        material_topics: topicSelections.length > 0 ? topicSelections : null,
+        sdg_goals: sdgSelections.length > 0 ? sdgSelections : null,
       })
       setProject(updated)
       setSaveMessage('Seleções salvas.')

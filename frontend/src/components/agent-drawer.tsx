@@ -439,11 +439,11 @@ export function AgentDrawer({
     () =>
       Boolean(
         currentProjectId &&
-          activeThreadId &&
-          composerValue.trim() &&
-          !isSending &&
-          !isLoadingWorkspace &&
-          !workspaceError
+        activeThreadId &&
+        composerValue.trim() &&
+        !isSending &&
+        !isLoadingWorkspace &&
+        !workspaceError
       ),
     [
       activeThreadId,
@@ -828,8 +828,8 @@ export function AgentDrawer({
           ) : messages.length === 0 && !streamingAssistantMessage ? (
             <div className="flex h-full min-h-[240px] items-center justify-center text-center">
               <p className="max-w-[280px] text-[12px] leading-5 tracking-[-0.01em] text-[#9b9ba1]">
-                Pergunte algo sobre o projeto. O agente responde apenas com
-                base nos documentos indexados.
+                Pergunte algo sobre o projeto. O agente responde apenas com base
+                nos documentos indexados.
               </p>
             </div>
           ) : (

@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     report_rag_top_k: int = 10
     report_min_section_ratio: float = 0.6
     report_max_section_ratio: float = 1.4
+    report_phase1_max_concurrency: int = 5
+    report_agent_timeout_seconds: int = 120
     aws_cognito_region: str = "us-east-1"
     aws_cognito_user_pool_id: str = "us-east-1_example123"
     aws_cognito_app_client_id: str = "exampleclientid1234567890"

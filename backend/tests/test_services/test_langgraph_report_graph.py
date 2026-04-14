@@ -6,8 +6,6 @@ LLM and DB integration are exercised via a separate end-to-end smoke test
 
 from __future__ import annotations
 
-import pytest
-
 from app.services.langgraph_report_graph import (
     _dispatcher_router,
     _extract_gri_evidence,
@@ -18,7 +16,6 @@ from app.services.langgraph_report_graph import (
     _summarize_section_for_prior,
 )
 from app.services.report_sections import REPORT_SECTIONS, get_section
-
 
 # ---- helpers ----
 

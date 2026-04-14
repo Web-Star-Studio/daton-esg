@@ -26,6 +26,13 @@ from app.schemas.project import (
     ProjectUpdate,
     SdgSelection,
 )
+from app.schemas.reference_data import (
+    CaptacaoRowResponse,
+    GriStandardResponse,
+    IndicatorTemplateResponse,
+    OdsGoalResponse,
+    OdsMetaResponse,
+)
 from app.schemas.report import (
     GriIndexEntry,
     ReportGapEntry,
@@ -33,13 +40,6 @@ from app.schemas.report import (
     ReportResponse,
     ReportSectionPayload,
     ReportSectionUpdateRequest,
-)
-from app.schemas.reference_data import (
-    CaptacaoRowResponse,
-    GriStandardResponse,
-    IndicatorTemplateResponse,
-    OdsGoalResponse,
-    OdsMetaResponse,
 )
 
 __all__ = [

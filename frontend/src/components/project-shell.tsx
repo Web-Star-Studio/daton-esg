@@ -618,7 +618,9 @@ export function ProjectShell({
                 const isActive = item.key === activeSidebarKey
                 const href = getSidebarHref(item.key, {
                   documentsHref,
+                  generationHref,
                   indicatorsHref,
+                  materialityHref,
                   overviewHref,
                 })
                 const navContent = (

@@ -3,7 +3,8 @@ dedicated Pinecone namespace so the report drafting agent can retrieve them as
 conceptual context.
 
 Framework reference chunks are distinct from project evidence:
- - They live in a shared, globally-readable namespace (e.g. ``__reference__gri-2021-pt``).
+ - They live in a shared, globally-readable namespace
+   (e.g. ``__reference__gri-2021-pt``).
  - They must never be mixed with project namespaces (enforced by naming convention).
  - They are presented to the LLM with an explicit "NÃO é evidência" disclaimer
    (enforced downstream in the report drafting prompt).
@@ -16,6 +17,7 @@ leading/trailing text without an anchor is captured as an "intro" chunk with
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 from dataclasses import dataclass
@@ -30,11 +32,10 @@ from app.services.vector_store import VectorRecord, VectorStore, get_vector_stor
 logger = logging.getLogger(__name__)
 
 # Disclosure heading patterns in the consolidated GRI PDF. The PDF uses
-# "Conteúdo X-Y <title>" as the canonical heading for each disclosure. Some
-# sections use "GRI X-Y" or a bare "X-Y"; sectoral standards use "Tema X.Y"
-# which we intentionally ignore (different numbering scheme, out of scope).
+# "Conteúdo X-Y <title>" as the canonical heading for each disclosure.
+# Also matches bare "305-1" at line start and "GRI X-Y".
 _CODE_ANCHOR_PATTERN = re.compile(
-    r"(?m)^\s*(?:Conte[úu]do|Conteudo|GRI)\s+(\d{1,3})-(\d+[a-z]?)\b",
+    r"(?m)^\s*(?:Conte[úu]do|Conteudo|GRI)?\s*(\d{1,3})-(\d+[a-z]?)\b",
     re.IGNORECASE,
 )
 
@@ -119,11 +120,22 @@ def _split_page_into_anchored_chunks(
         start = match.start()
         end = matches[idx + 1].start() if idx + 1 < len(matches) else len(page_text)
         code, family = _normalize_code(match.group(1), match.group(2))
-        if valid_codes is not None and code not in valid_codes:
-            # anchor-like text but not in the known seed; treat as context
-            continue
         content = page_text[start:end].strip()
         if not content:
+            continue
+        if valid_codes is not None and code not in valid_codes:
+            # anchor-like text but not in the known seed — preserve as
+            # code-less context instead of dropping
+            chunks.append(
+                FrameworkChunk(
+                    code=None,
+                    family=None,
+                    content=content,
+                    page=page_number,
+                    framework=framework,
+                    version=version,
+                )
+            )
             continue
         chunks.append(
             FrameworkChunk(
@@ -182,6 +194,8 @@ async def ingest_framework_chunks(
 
     Returns the number of records upserted.
     """
+    if not namespace.startswith("__reference__"):
+        raise ValueError("ingest_framework_chunks refuses non-reference namespaces")
     if not chunks:
         return 0
     embedder = embedding_service or get_embedding_service()
@@ -193,8 +207,13 @@ async def ingest_framework_chunks(
         vectors = await embedder.embed_texts([chunk.content for chunk in batch])
         records: list[VectorRecord] = []
         for chunk, vector in zip(batch, vectors):
-            suffix = chunk.code or f"page-{chunk.page}"
-            record_id = f"{chunk.framework.lower()}-{chunk.version}-{suffix}-{batch_start}"
+            # deterministic ID based on intrinsic chunk fields
+            digest_input = (
+                f"{chunk.framework}|{chunk.version}|"
+                f"{chunk.code or ''}|{chunk.page or ''}|"
+                f"{source}|{chunk.content[:200]}"
+            )
+            record_id = hashlib.sha256(digest_input.encode()).hexdigest()[:24]
             records.append(
                 VectorRecord(
                     id=record_id,

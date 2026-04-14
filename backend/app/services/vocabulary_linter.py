@@ -16,7 +16,6 @@ import re
 from dataclasses import dataclass
 from typing import Iterable
 
-
 FORBIDDEN_TERMS: tuple[str, ...] = (
     "orgulho",
     "protagonismo",

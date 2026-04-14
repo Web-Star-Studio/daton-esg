@@ -80,9 +80,21 @@ describe('ProjectMaterialityPage', () => {
     mockFetchProject.mockResolvedValue(baseProject)
     mockFetchProjects.mockResolvedValue([baseProject])
     mockFetchIndicatorTemplates.mockResolvedValue([
-      { tema: 'Clima e Energia', indicador: 'Consumo de energia', unidade: 'kWh/ano' },
-      { tema: 'Capital Humano', indicador: 'Horas de treinamento', unidade: 'h/ano' },
-      { tema: 'Governança / Ética', indicador: 'Denúncias resolvidas', unidade: 'unidades' },
+      {
+        tema: 'Clima e Energia',
+        indicador: 'Consumo de energia',
+        unidade: 'kWh/ano',
+      },
+      {
+        tema: 'Capital Humano',
+        indicador: 'Horas de treinamento',
+        unidade: 'h/ano',
+      },
+      {
+        tema: 'Governança / Ética',
+        indicador: 'Denúncias resolvidas',
+        unidade: 'unidades',
+      },
     ])
     mockFetchOdsGoals.mockResolvedValue([
       {

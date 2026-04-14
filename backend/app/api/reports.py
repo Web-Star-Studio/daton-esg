@@ -16,6 +16,7 @@ from app.schemas.report import (
 )
 from app.services.project_service import get_project_for_user
 from app.services.report_service import (
+    ReportConflictError,
     create_report,
     export_report_docx,
     get_report_detail,
@@ -72,12 +73,10 @@ async def generate_report(
         )
     try:
         report = await create_report(session, project_id=project.id)
-    except ValueError as exc:
+    except (ReportConflictError, ValueError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    stream = stream_report_generation(
-        session, project=project, report=report
-    )
+    stream = stream_report_generation(session, project=project, report=report)
     return StreamingResponse(
         stream,
         media_type="text/event-stream",
@@ -99,11 +98,11 @@ async def export_docx(
     if report is None:
         raise HTTPException(status_code=404, detail="Relatório não encontrado.")
     try:
-        download_url = await export_report_docx(
-            session, project=project, report=report
-        )
+        download_url = await export_report_docx(session, project=project, report=report)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+        ) from exc
     return {"download_url": download_url}
 
 
@@ -132,6 +131,10 @@ async def patch_report_section(
         raise HTTPException(
             status_code=404,
             detail="Seção não encontrada no relatório.",
+        ) from exc
+    except ReportConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
         ) from exc
     except ValueError as exc:
         raise HTTPException(

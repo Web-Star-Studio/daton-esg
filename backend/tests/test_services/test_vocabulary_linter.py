@@ -1,7 +1,5 @@
 """Tests for the Prompt-Mestre vocabulary linter."""
 
-import pytest
-
 from app.services.vocabulary_linter import (
     CONTROLLED_TERMS,
     FORBIDDEN_TERMS,
@@ -47,7 +45,11 @@ def test_controlled_term_allowed_with_numeric_context() -> None:
     terms = {w.term.lower() for w in result.warnings}
     # "compromisso" followed shortly by "12.895 tCO2e" is OK; "redução" followed
     # shortly by numeric data is OK.
-    assert "compromisso" not in terms or "redução" not in terms or len(result.warnings) == 0
+    assert (
+        "compromisso" not in terms
+        or "redução" not in terms
+        or len(result.warnings) == 0
+    )
 
 
 def test_clean_content_is_noop() -> None:

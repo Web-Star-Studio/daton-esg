@@ -1,33 +1,38 @@
 """Report orchestration + SSE streaming.
 
 - ``create_report`` creates a new Report row in GENERATING status.
-- ``stream_report_generation`` runs the LangGraph pipeline and yields SSE bytes.
-  Follows the same pattern as ``langgraph_chat_service.stream_project_chat_message``.
+- ``stream_report_generation`` uses the multi-agent pipeline via asyncio.Queue,
+  draining SSE events as agents produce them in parallel (Phase 1) and
+  sequentially (Phase 2).
 - ``list_reports`` / ``get_report_detail`` are straightforward selects.
 - ``update_report_section`` mutates a single entry inside the JSONB list.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import AsyncGenerator
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.models import Project, Report
 from app.models.enums import ReportStatus
 from app.services.docx_export_service import generate_report_docx
-from app.services.langgraph_report_graph import (
-    build_initial_state,
-    get_report_graph,
-)
+from app.services.report_pipeline import SSEEvent, run_report_pipeline
 from app.services.report_sections import REPORT_SECTIONS
 from app.services.storage_service import StorageService, get_storage_service
+
+
+class ReportConflictError(Exception):
+    """Raised when an operation conflicts with the report's current state."""
+
 
 logger = logging.getLogger(__name__)
 
@@ -65,9 +70,7 @@ def _report_to_payload(report: Report) -> dict[str, Any]:
 # ------------------------------ queries -----------------------------------
 
 
-async def list_reports(
-    session: AsyncSession, *, project_id: UUID
-) -> list[Report]:
+async def list_reports(session: AsyncSession, *, project_id: UUID) -> list[Report]:
     result = await session.execute(
         select(Report)
         .where(Report.project_id == project_id)
@@ -80,16 +83,12 @@ async def get_report_detail(
     session: AsyncSession, *, project_id: UUID, report_id: UUID
 ) -> Report | None:
     result = await session.execute(
-        select(Report).where(
-            Report.project_id == project_id, Report.id == report_id
-        )
+        select(Report).where(Report.project_id == project_id, Report.id == report_id)
     )
     return result.scalar_one_or_none()
 
 
-async def _has_generating_report(
-    session: AsyncSession, *, project_id: UUID
-) -> bool:
+async def _has_generating_report(session: AsyncSession, *, project_id: UUID) -> bool:
     result = await session.execute(
         select(func.count(Report.id))
         .where(Report.project_id == project_id)
@@ -109,15 +108,26 @@ async def _next_version(session: AsyncSession, *, project_id: UUID) -> int:
 # ---------------------------- create / update -----------------------------
 
 
-async def create_report(
-    session: AsyncSession, *, project_id: UUID
-) -> Report:
-    """Create a new Report row in GENERATING status. Caller should immediately
-    start streaming generation. Raises ValueError if a generation is already
-    in progress for this project.
+async def create_report(session: AsyncSession, *, project_id: UUID) -> Report:
+    """Create a new Report row in GENERATING status, atomically.
+
+    Acquires a row-level lock on the project to prevent TOCTOU races where
+    two concurrent requests both pass the generating-check before either
+    inserts. The partial unique index ``ix_reports_one_generating_per_project``
+    is the DB-level safety net; ``IntegrityError`` is caught and converted to
+    the same conflict response.
+
+    Raises ``ReportConflictError`` if a generation is already in progress.
     """
+    # Lock the project row to serialize concurrent create_report calls
+    await session.execute(
+        text("SELECT id FROM projects WHERE id = :pid FOR UPDATE"),
+        {"pid": str(project_id)},
+    )
     if await _has_generating_report(session, project_id=project_id):
-        raise ValueError("Já existe uma geração de relatório em andamento para este projeto.")
+        raise ReportConflictError(
+            "Já existe uma geração de relatório em andamento para este projeto."
+        )
     version = await _next_version(session, project_id=project_id)
     report = Report(
         project_id=project_id,
@@ -127,7 +137,26 @@ async def create_report(
         gaps=[],
     )
     session.add(report)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        # Re-check: another request won the race
+        if await _has_generating_report(session, project_id=project_id):
+            raise ReportConflictError(
+                "Já existe uma geração de relatório em andamento para este projeto."
+            )
+        # Version collision — re-derive and retry once
+        version = await _next_version(session, project_id=project_id)
+        report = Report(
+            project_id=project_id,
+            version=version,
+            status=ReportStatus.GENERATING,
+            sections=[],
+            gaps=[],
+        )
+        session.add(report)
+        await session.commit()
     await session.refresh(report)
     return report
 
@@ -145,6 +174,10 @@ async def update_report_section(
     )
     if report is None:
         raise LookupError("Report not found")
+    if report.status == ReportStatus.GENERATING:
+        raise ReportConflictError(
+            "Relatório em geração — aguarde a conclusão para editar."
+        )
 
     sections_raw = report.sections
     if not isinstance(sections_raw, list):
@@ -179,19 +212,15 @@ async def stream_report_generation(
     report: Report,
     settings: Settings | None = None,
 ) -> AsyncGenerator[bytes, None]:
-    """Run the LangGraph report pipeline, yielding SSE events as it progresses.
+    """Run the multi-agent report pipeline, yielding SSE events as agents
+    produce them via a shared asyncio.Queue.
 
-    On completion (or on fatal error mid-run) the Report row is left in the
-    appropriate status for the frontend to poll later via GET.
+    Phase 1 agents run in parallel; Phase 2 sequentially; Phase 3 is
+    deterministic. The SSE event types are identical to the previous
+    single-agent loop — the frontend is unchanged.
     """
     current_settings = settings or get_settings()
-    graph = get_report_graph()
-    state = build_initial_state(
-        session=session,
-        project=project,
-        report_id=report.id,
-        settings=current_settings,
-    )
+    event_queue: asyncio.Queue[SSEEvent | None] = asyncio.Queue()
 
     yield _sse_event(
         "report_started",
@@ -206,78 +235,21 @@ async def stream_report_generation(
         },
     )
 
-    current_template_key: str | None = None
+    pipeline_task = asyncio.create_task(
+        run_report_pipeline(
+            project=project,
+            report_id=report.id,
+            settings=current_settings,
+            event_queue=event_queue,
+        )
+    )
+
     try:
-        async for chunk in graph.astream(
-            state,
-            stream_mode=["updates", "messages"],
-            version="v2",
-        ):
-            mode, data = chunk
-            if mode == "messages":
-                message_chunk, metadata = data
-                if metadata.get("langgraph_node") != "generate_section":
-                    continue
-                text = (
-                    message_chunk.text()
-                    if callable(getattr(message_chunk, "text", None))
-                    else str(message_chunk.content)
-                )
-                if not text:
-                    continue
-                yield _sse_event(
-                    "section_token",
-                    {"section_key": current_template_key or "", "text": text},
-                )
-            elif mode == "updates":
-                for node_name, node_update in data.items():
-                    if node_name == "section_dispatcher":
-                        template = (
-                            node_update.get("current_template")
-                            if isinstance(node_update, dict)
-                            else None
-                        )
-                        if template is not None:
-                            current_template_key = template.key
-                            yield _sse_event(
-                                "section_started",
-                                {
-                                    "section_key": template.key,
-                                    "title": template.title,
-                                    "order": template.order,
-                                    "target_words": template.target_words,
-                                },
-                            )
-                    elif node_name == "validate_and_persist":
-                        completed = (
-                            node_update.get("completed_sections")
-                            if isinstance(node_update, dict)
-                            else None
-                        ) or []
-                        if completed:
-                            last = completed[-1]
-                            yield _sse_event(
-                                "section_completed",
-                                {
-                                    "section_key": last.get("key"),
-                                    "word_count": last.get("word_count"),
-                                    "gri_codes_used": last.get("gri_codes_used", []),
-                                    "status": last.get("status"),
-                                },
-                            )
-                    elif node_name == "build_gri_index":
-                        yield _sse_event(
-                            "gri_summary_built",
-                            {
-                                "total_codes": len(
-                                    node_update.get("_sumario", [])
-                                    if isinstance(node_update, dict)
-                                    else []
-                                )
-                            },
-                        )
-                    elif node_name == "finalize_report":
-                        pass
+        while True:
+            event = await event_queue.get()
+            if event is None:
+                break
+            yield _sse_event(event.event_type, event.data)
     except Exception as exc:
         logger.exception(
             "report.stream_failed",
@@ -286,25 +258,36 @@ async def stream_report_generation(
                 "report_id": str(report.id),
             },
         )
-        # mark the report as failed via gaps + keep status GENERATING for retry
-        fresh = await get_report_detail(
-            session, project_id=project.id, report_id=report.id
+        yield _sse_event(
+            "report_failed",
+            {
+                "message": (
+                    str(exc)
+                    if current_settings.environment == "development"
+                    else "Falha na geração do relatório."
+                )
+            },
         )
-        if fresh is not None:
-            fresh_gaps = list(fresh.gaps or [])
-            fresh_gaps.append(
-                {
-                    "section_key": None,
-                    "category": "generation_error",
-                    "detail": (
-                        str(exc)
-                        if current_settings.environment == "development"
-                        else "Falha interna na geração do relatório."
-                    ),
-                }
-            )
-            fresh.gaps = fresh_gaps
-            await session.commit()
+        return
+    finally:
+        if not pipeline_task.done():
+            pipeline_task.cancel()
+            try:
+                await pipeline_task
+            except (asyncio.CancelledError, Exception):
+                pass
+
+    # propagate pipeline exceptions
+    if pipeline_task.done() and pipeline_task.exception():
+        exc = pipeline_task.exception()
+        logger.exception(
+            "report.pipeline_exception",
+            extra={
+                "project_id": str(project.id),
+                "report_id": str(report.id),
+            },
+            exc_info=exc,
+        )
         yield _sse_event(
             "report_failed",
             {
@@ -317,9 +300,7 @@ async def stream_report_generation(
         )
         return
 
-    final = await get_report_detail(
-        session, project_id=project.id, report_id=report.id
-    )
+    final = await get_report_detail(session, project_id=project.id, report_id=report.id)
     yield _sse_event(
         "report_completed",
         {
@@ -350,7 +331,9 @@ async def export_report_docx(
     Report row, and return a presigned download URL.
     """
     if report.status == ReportStatus.GENERATING:
-        raise ValueError("Relatório ainda em geração — aguarde a conclusão para exportar.")
+        raise ValueError(
+            "Relatório ainda em geração — aguarde a conclusão para exportar."
+        )
     storage = storage or get_storage_service()
     docx_bytes = generate_report_docx(report, project)
     key = _report_s3_key(report)

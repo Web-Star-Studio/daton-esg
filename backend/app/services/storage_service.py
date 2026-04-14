@@ -108,9 +108,7 @@ class StorageService:
             ExpiresIn=expires_in_seconds,
         )
 
-    async def put_object(
-        self, *, key: str, body: bytes, content_type: str
-    ) -> None:
+    async def put_object(self, *, key: str, body: bytes, content_type: str) -> None:
         await asyncio.to_thread(
             self._put_object, key=key, body=body, content_type=content_type
         )

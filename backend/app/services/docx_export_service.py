@@ -33,7 +33,7 @@ _ITALIC_PATTERN = re.compile(r"(?<!\*)\*([^*\n]+)\*(?!\*)")
 def _family_order(rows: list[dict[str, Any]]) -> list[str]:
     families_seen: list[str] = []
     preferred = ["2", "3", "200", "300", "400"]
-    grouped = {row.get("family", "") for row in rows}
+    grouped = {row.get("family") or "outros" for row in rows}
     for family in preferred:
         if family in grouped:
             families_seen.append(family)
@@ -84,6 +84,7 @@ def _is_markdown_table_line(line: str) -> bool:
 
 def _parse_markdown_table(lines: list[str]) -> list[list[str]]:
     rows: list[list[str]] = []
+    max_cols = 0
     for line in lines:
         stripped = line.strip().strip("|")
         if not stripped:
@@ -93,6 +94,11 @@ def _parse_markdown_table(lines: list[str]) -> list[list[str]]:
             continue
         cells = [cell.strip() for cell in stripped.split("|")]
         rows.append(cells)
+        max_cols = max(max_cols, len(cells))
+    # normalize: pad short rows with empty strings
+    for row in rows:
+        while len(row) < max_cols:
+            row.append("")
     return rows
 
 

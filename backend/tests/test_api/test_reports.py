@@ -135,14 +135,10 @@ def test_get_report_detail(monkeypatch, reports_app) -> None:
     monkeypatch.setattr(
         "app.api.reports.get_project_for_user", fake_get_project_for_user
     )
-    monkeypatch.setattr(
-        "app.api.reports.get_report_detail", fake_get_report_detail
-    )
+    monkeypatch.setattr("app.api.reports.get_report_detail", fake_get_report_detail)
 
     with TestClient(app) as client:
-        response = client.get(
-            f"/api/v1/projects/{project.id}/reports/{report.id}"
-        )
+        response = client.get(f"/api/v1/projects/{project.id}/reports/{report.id}")
 
     assert response.status_code == 200
     payload = response.json()
@@ -163,14 +159,10 @@ def test_get_report_detail_404(monkeypatch, reports_app) -> None:
     monkeypatch.setattr(
         "app.api.reports.get_project_for_user", fake_get_project_for_user
     )
-    monkeypatch.setattr(
-        "app.api.reports.get_report_detail", fake_get_report_detail
-    )
+    monkeypatch.setattr("app.api.reports.get_report_detail", fake_get_report_detail)
 
     with TestClient(app) as client:
-        response = client.get(
-            f"/api/v1/projects/{project.id}/reports/{uuid4()}"
-        )
+        response = client.get(f"/api/v1/projects/{project.id}/reports/{uuid4()}")
     assert response.status_code == 404
 
 
@@ -186,9 +178,7 @@ def test_generate_report_gate_requires_materialidade(monkeypatch, reports_app) -
     )
 
     with TestClient(app) as client:
-        response = client.post(
-            f"/api/v1/projects/{project.id}/reports/generate"
-        )
+        response = client.post(f"/api/v1/projects/{project.id}/reports/generate")
 
     assert response.status_code == 400
     assert "Materialidade" in response.json()["detail"]
@@ -200,16 +190,16 @@ def test_generate_report_conflict_when_already_running(
     app, _session, user = reports_app
     project = _make_project(
         user,
-        material_topics=[
-            {"pillar": "E", "topic": "Clima e Energia", "priority": 4}
-        ],
+        material_topics=[{"pillar": "E", "topic": "Clima e Energia", "priority": 4}],
     )
 
     async def fake_get_project_for_user(_session, _pid, _uid):
         return project
 
     async def fake_create_report(_session, *, project_id):
-        raise ValueError("Já existe uma geração em andamento")
+        from app.services.report_service import ReportConflictError
+
+        raise ReportConflictError("Já existe uma geração em andamento")
 
     monkeypatch.setattr(
         "app.api.reports.get_project_for_user", fake_get_project_for_user
@@ -217,20 +207,51 @@ def test_generate_report_conflict_when_already_running(
     monkeypatch.setattr("app.api.reports.create_report", fake_create_report)
 
     with TestClient(app) as client:
-        response = client.post(
-            f"/api/v1/projects/{project.id}/reports/generate"
+        response = client.post(f"/api/v1/projects/{project.id}/reports/generate")
+
+    assert response.status_code == 409
+
+
+def test_patch_section_409_while_generating(monkeypatch, reports_app) -> None:
+    app, _session, user = reports_app
+    project = _make_project(user)
+    report = _make_report(project, status=ReportStatus.GENERATING)
+
+    async def fake_get_project_for_user(_session, _pid, _uid):
+        return project
+
+    async def fake_update_report_section(
+        _session, *, project_id, report_id, section_key, new_content
+    ):
+        from app.services.report_service import ReportConflictError
+
+        raise ReportConflictError(
+            "Relatório em geração — aguarde a conclusão para editar."
+        )
+
+    monkeypatch.setattr(
+        "app.api.reports.get_project_for_user", fake_get_project_for_user
+    )
+    monkeypatch.setattr(
+        "app.api.reports.update_report_section",
+        fake_update_report_section,
+    )
+
+    with TestClient(app) as client:
+        response = client.patch(
+            f"/api/v1/projects/{project.id}/reports/{report.id}/sections/a-empresa",
+            json={"content": "texto editado"},
         )
 
     assert response.status_code == 409
+    assert "geração" in response.json()["detail"].lower()
 
 
 def test_generate_report_streams_sse(monkeypatch, reports_app) -> None:
     app, _session, user = reports_app
     project = _make_project(
         user,
-        material_topics=[
-            {"pillar": "E", "topic": "Clima e Energia", "priority": 4}
-        ],
+        material_topics=[{"pillar": "E", "topic": "Clima e Energia", "priority": 4}],
     )
     report = _make_report(project, status=ReportStatus.GENERATING)
 
@@ -243,16 +264,17 @@ def test_generate_report_streams_sse(monkeypatch, reports_app) -> None:
     async def fake_stream(_session, *, project, report, settings=None):
         yield b'event: report_started\ndata: {"version":1}\n\n'
         yield b'event: section_started\ndata: {"section_key":"a-empresa"}\n\n'
-        yield b'event: section_completed\ndata: {"section_key":"a-empresa","status":"completed"}\n\n'
-        yield b'event: report_completed\ndata: {}\n\n'
+        yield (
+            b"event: section_completed\n"
+            b'data: {"section_key":"a-empresa","status":"completed"}\n\n'
+        )
+        yield b"event: report_completed\ndata: {}\n\n"
 
     monkeypatch.setattr(
         "app.api.reports.get_project_for_user", fake_get_project_for_user
     )
     monkeypatch.setattr("app.api.reports.create_report", fake_create_report)
-    monkeypatch.setattr(
-        "app.api.reports.stream_report_generation", fake_stream
-    )
+    monkeypatch.setattr("app.api.reports.stream_report_generation", fake_stream)
 
     with TestClient(app) as client:
         with client.stream(

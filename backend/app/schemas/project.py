@@ -8,7 +8,7 @@ from app.models.enums import OrganizationSize, ProjectStatus
 
 
 class MaterialTopic(BaseModel):
-    """One selected material topic with its ESG pillar and consultant-assigned priority."""
+    """Material topic with ESG pillar and priority."""
 
     pillar: Literal["E", "S", "G"]
     topic: str = Field(min_length=1, max_length=255)

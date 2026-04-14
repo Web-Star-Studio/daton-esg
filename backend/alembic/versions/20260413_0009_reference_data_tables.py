@@ -19,9 +19,7 @@ def upgrade() -> None:
         sa.Column("standard_text", sa.Text(), nullable=False),
         sa.UniqueConstraint("code", name="uq_gri_standards_code"),
     )
-    op.create_index(
-        "ix_gri_standards_code", "gri_standards", ["code"], unique=False
-    )
+    op.create_index("ix_gri_standards_code", "gri_standards", ["code"], unique=False)
     op.create_index(
         "ix_gri_standards_family", "gri_standards", ["family"], unique=False
     )
@@ -55,9 +53,7 @@ def upgrade() -> None:
         sa.Column("sessao", sa.String(length=64), nullable=False),
         sa.Column("tipo_dado", sa.String(length=255), nullable=False),
         sa.Column("gri_code", sa.String(length=20), nullable=True),
-        sa.Column(
-            "descricao", sa.Text(), nullable=False, server_default=sa.text("''")
-        ),
+        sa.Column("descricao", sa.Text(), nullable=False, server_default=sa.text("''")),
         sa.Column(
             "fonte_documental",
             sa.String(length=255),
@@ -72,9 +68,7 @@ def upgrade() -> None:
         ),
     )
     op.create_index("ix_captacao_matriz_sessao", "captacao_matriz", ["sessao"])
-    op.create_index(
-        "ix_captacao_matriz_gri_code", "captacao_matriz", ["gri_code"]
-    )
+    op.create_index("ix_captacao_matriz_gri_code", "captacao_matriz", ["gri_code"])
 
     op.create_table(
         "indicator_templates",
@@ -88,9 +82,7 @@ def upgrade() -> None:
             server_default=sa.text("''"),
         ),
     )
-    op.create_index(
-        "ix_indicator_templates_tema", "indicator_templates", ["tema"]
-    )
+    op.create_index("ix_indicator_templates_tema", "indicator_templates", ["tema"])
 
 
 def downgrade() -> None:

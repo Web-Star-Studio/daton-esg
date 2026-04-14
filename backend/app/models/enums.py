@@ -46,6 +46,7 @@ class AgentChatMessageRole(StrEnum):
 
 class ReportStatus(StrEnum):
     GENERATING = "generating"
+    FAILED = "failed"
     DRAFT = "draft"
     REVIEWED = "reviewed"
     EXPORTED = "exported"

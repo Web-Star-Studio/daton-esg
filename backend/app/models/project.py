@@ -78,6 +78,9 @@ class Project(Base):
         "AgentChatMessage",
         back_populates="project",
         cascade="all, delete-orphan",
+        primaryjoin="Project.id == AgentChatMessage.project_id",
+        foreign_keys="[AgentChatMessage.project_id]",
+        overlaps="thread,messages",
     )
     rag_chunks = relationship(
         "DocumentRagChunk",

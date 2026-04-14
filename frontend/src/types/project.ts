@@ -67,7 +67,12 @@ export type IndicatorTemplateRecord = {
   unidade: string
 }
 
-export type ReportStatus = 'generating' | 'draft' | 'reviewed' | 'exported'
+export type ReportStatus =
+  | 'generating'
+  | 'failed'
+  | 'draft'
+  | 'reviewed'
+  | 'exported'
 
 export type ReportSection = {
   key: string

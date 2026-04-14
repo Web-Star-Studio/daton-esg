@@ -18,6 +18,7 @@ class ReportSectionPayload(BaseModel):
     gri_codes_used: list[str] = Field(default_factory=list)
     word_count: int = 0
     status: Literal["completed", "sparse_data", "failed"] = "completed"
+    audit: dict[str, Any] | None = None
 
 
 class GriIndexEntry(BaseModel):

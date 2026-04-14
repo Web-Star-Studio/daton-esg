@@ -114,7 +114,11 @@ async def retrieve_framework_reference(
         if not content:
             continue
         page_value = metadata.get("page")
-        page = int(page_value) if isinstance(page_value, (int, float)) and page_value else None
+        page = (
+            int(page_value)
+            if isinstance(page_value, (int, float)) and page_value
+            else None
+        )
         results.append(
             FrameworkReferenceChunk(
                 framework=str(metadata.get("framework") or ""),

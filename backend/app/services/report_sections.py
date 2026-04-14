@@ -53,7 +53,10 @@ REPORT_SECTIONS: tuple[ReportSectionTemplate, ...] = (
         title="A Empresa",
         order=1,
         heading_level=1,
-        directory_keys=("visao-estrategica-de-sustentabilidade", "governanca-corporativa"),
+        directory_keys=(
+            "visao-estrategica-de-sustentabilidade",
+            "governanca-corporativa",
+        ),
         gri_codes=("GRI 2-1", "GRI 2-2", "GRI 2-6"),
         rag_queries=(
             "perfil organizacional historia missao visao valores",

@@ -37,7 +37,9 @@ vi.mock('../services/api-client', () => ({
 const mockUseAuth = vi.mocked(useAuth)
 const mockFetchProject = vi.mocked(fetchProject)
 const mockFetchProjects = vi.mocked(fetchProjects)
-const mockFetchProjectGenerationThreads = vi.mocked(fetchProjectGenerationThreads)
+const mockFetchProjectGenerationThreads = vi.mocked(
+  fetchProjectGenerationThreads
+)
 const mockFetchReports = vi.mocked(fetchReports)
 const mockFetchReport = vi.mocked(fetchReport)
 const mockStreamReportGeneration = vi.mocked(streamReportGeneration)
@@ -263,9 +265,7 @@ describe('ProjectGenerationPage', () => {
     renderPage()
 
     await waitFor(() => {
-      expect(
-        screen.getByText(/nenhum relatório ainda/i)
-      ).toBeInTheDocument()
+      expect(screen.getByText(/nenhum relatório ainda/i)).toBeInTheDocument()
     })
 
     fireEvent.click(screen.getByRole('button', { name: /gerar relatório/i }))

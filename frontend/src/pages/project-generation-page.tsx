@@ -33,6 +33,7 @@ type PipelineSection = {
 
 const STATUS_LABELS: Record<ReportStatus, string> = {
   generating: 'Gerando',
+  failed: 'Falhou',
   draft: 'Rascunho',
   reviewed: 'Revisado',
   exported: 'Exportado',
@@ -40,6 +41,7 @@ const STATUS_LABELS: Record<ReportStatus, string> = {
 
 const STATUS_COLORS: Record<ReportStatus, string> = {
   generating: 'bg-[#fff6d9] text-[#8a6200]',
+  failed: 'bg-[#ffd0d0] text-[#d01f1f]',
   draft: 'bg-[#e6f1fc] text-[#0673e0]',
   reviewed: 'bg-[#e6f5ec] text-[#2b8a3e]',
   exported: 'bg-black/5 text-[#1d1d1f]',
@@ -122,7 +124,9 @@ function GriIndexTable({ entries }: { entries: GriIndexEntry[] | null }) {
                     <td className="px-3 py-2 text-[#6b6b72]">
                       {entry.evidence_excerpt ? (
                         <>
-                          <span className="block">{entry.evidence_excerpt}</span>
+                          <span className="block">
+                            {entry.evidence_excerpt}
+                          </span>
                           {entry.section_ref ? (
                             <span className="text-[10px] uppercase tracking-[0.08em] text-[#9b9ba1]">
                               ({entry.section_ref})
@@ -159,12 +163,17 @@ function GriIndexTable({ entries }: { entries: GriIndexEntry[] | null }) {
 
 // ---------- section editor ----------
 
+type SectionEditorHandle = {
+  flush: () => Promise<void>
+}
+
 type SectionEditorProps = {
   section: ReportSection
   onSave: (content: string) => Promise<void>
+  handleRef?: React.MutableRefObject<SectionEditorHandle | null>
 }
 
-function SectionEditor({ section, onSave }: SectionEditorProps) {
+function SectionEditor({ section, onSave, handleRef }: SectionEditorProps) {
   const [draft, setDraft] = useState(section.content)
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -174,6 +183,32 @@ function SectionEditor({ section, onSave }: SectionEditorProps) {
     setDraft(section.content)
     savedRef.current = section.content
   }, [section.key, section.content])
+
+  // expose flush handle so parent can await save before export
+  useEffect(() => {
+    if (handleRef) {
+      handleRef.current = {
+        flush: async () => {
+          if (draft !== savedRef.current && !isSaving) {
+            setIsSaving(true)
+            setSaveError(null)
+            try {
+              await onSave(draft)
+              savedRef.current = draft
+            } catch (error) {
+              setSaveError(
+                error instanceof Error
+                  ? error.message
+                  : 'Falha ao salvar a seção.'
+              )
+            } finally {
+              setIsSaving(false)
+            }
+          }
+        },
+      }
+    }
+  })
 
   async function handleBlur() {
     if (draft === savedRef.current || isSaving) return
@@ -195,7 +230,10 @@ function SectionEditor({ section, onSave }: SectionEditorProps) {
     <div className="flex h-full min-h-0 flex-col">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-[16px] font-medium tracking-[-0.015em] text-[#1d1d1f]">
+          <h3
+            id={`section-heading-${section.key}`}
+            className="text-[16px] font-medium tracking-[-0.015em] text-[#1d1d1f]"
+          >
             {section.title}
           </h3>
           <p className="mt-0.5 text-[11px] tracking-[-0.01em] text-[#9b9ba1]">
@@ -220,6 +258,7 @@ function SectionEditor({ section, onSave }: SectionEditorProps) {
         </p>
       ) : null}
       <textarea
+        aria-labelledby={`section-heading-${section.key}`}
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
         onBlur={handleBlur}
@@ -316,9 +355,7 @@ function GenerationProgress({
               </p>
             )
           ) : (
-            <p className="text-[#9b9ba1]">
-              Aguardando primeira seção iniciar…
-            </p>
+            <p className="text-[#9b9ba1]">Aguardando primeira seção iniciar…</p>
           )}
         </div>
       </div>
@@ -331,12 +368,8 @@ function GenerationProgress({
 type Tab = 'sections' | 'gri' | 'gaps'
 
 export function ProjectGenerationPage() {
-  const {
-    currentProjectId,
-    openAgentDrawer,
-    project,
-    workspaceError,
-  } = useProjectWorkspace()
+  const { currentProjectId, openAgentDrawer, project, workspaceError } =
+    useProjectWorkspace()
 
   useProjectShellRegistration({
     activeSidebarKey: 'generation',
@@ -351,10 +384,13 @@ export function ProjectGenerationPage() {
   const [pageError, setPageError] = useState<string | null>(null)
   const [pipeline, setPipeline] = useState<PipelineSection[]>([])
   const [activeSectionKey, setActiveSectionKey] = useState<string | null>(null)
-  const [selectedSectionKey, setSelectedSectionKey] = useState<string | null>(null)
+  const [selectedSectionKey, setSelectedSectionKey] = useState<string | null>(
+    null
+  )
   const [activeTab, setActiveTab] = useState<Tab>('sections')
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
   const [isExporting, setIsExporting] = useState(false)
+  const editorHandleRef = useRef<SectionEditorHandle | null>(null)
 
   const materialTopics = Array.isArray(project?.material_topics)
     ? project.material_topics
@@ -378,6 +414,10 @@ export function ProjectGenerationPage() {
           } finally {
             setIsLoadingActive(false)
           }
+        } else if (list.length === 0) {
+          setActiveReport(null)
+          setSelectedSectionKey(null)
+          setDownloadUrl(null)
         }
       } catch (error) {
         setPageError(
@@ -409,7 +449,9 @@ export function ProjectGenerationPage() {
       setActiveTab('sections')
     } catch (error) {
       setPageError(
-        error instanceof Error ? error.message : 'Falha ao carregar o relatório.'
+        error instanceof Error
+          ? error.message
+          : 'Falha ao carregar o relatório.'
       )
     } finally {
       setIsLoadingActive(false)
@@ -463,10 +505,7 @@ export function ProjectGenerationPage() {
               entry.key === data.section_key
                 ? {
                     ...entry,
-                    state:
-                      data.status === 'failed'
-                        ? 'failed'
-                        : 'completed',
+                    state: data.status === 'failed' ? 'failed' : 'completed',
                     wordCount: data.word_count,
                     griCodesUsed: data.gri_codes_used,
                   }
@@ -514,6 +553,10 @@ export function ProjectGenerationPage() {
     setIsExporting(true)
     setPageError(null)
     try {
+      // flush any pending section edit before exporting
+      if (editorHandleRef.current) {
+        await editorHandleRef.current.flush()
+      }
       const response = await exportReportDocx(currentProjectId, activeReport.id)
       setDownloadUrl(response.download_url)
       window.open(response.download_url, '_blank')
@@ -622,8 +665,8 @@ export function ProjectGenerationPage() {
             </p>
           ) : reports.length === 0 ? (
             <p className="text-[12px] leading-5 tracking-[-0.01em] text-[#9b9ba1]">
-              Nenhum relatório gerado. Clique em "Gerar Relatório" para
-              produzir a primeira versão preliminar.
+              Nenhum relatório gerado. Clique em "Gerar Relatório" para produzir
+              a primeira versão preliminar.
             </p>
           ) : (
             <ul className="space-y-0.5">
@@ -637,9 +680,7 @@ export function ProjectGenerationPage() {
                         void handleSelectReport(report.id)
                       }}
                       className={`apple-focus-ring flex w-full flex-col rounded-md px-2 py-1.5 text-left transition ${
-                        isActive
-                          ? 'bg-black/5'
-                          : 'hover:bg-black/[0.03]'
+                        isActive ? 'bg-black/5' : 'hover:bg-black/[0.03]'
                       }`}
                     >
                       <span className="flex items-center justify-between gap-2">
@@ -744,6 +785,7 @@ export function ProjectGenerationPage() {
                         onSave={(content) =>
                           handleSaveSection(selectedSection.key, content)
                         }
+                        handleRef={editorHandleRef}
                       />
                     ) : (
                       <p className="text-[13px] tracking-[-0.01em] text-[#9b9ba1]">
@@ -791,8 +833,8 @@ export function ProjectGenerationPage() {
                 </p>
                 <p className="text-[12px] leading-5 tracking-[-0.01em] text-[#9b9ba1]">
                   Defina os temas materiais, carregue documentos nas pastas
-                  correspondentes e clique em "Gerar Relatório" para produzir
-                  a primeira versão preliminar.
+                  correspondentes e clique em "Gerar Relatório" para produzir a
+                  primeira versão preliminar.
                 </p>
               </div>
             </div>

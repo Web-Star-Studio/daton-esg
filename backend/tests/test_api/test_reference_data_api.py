@@ -52,6 +52,7 @@ def _patch_session_execute(monkeypatch, payload):
 
     The endpoints call `session.execute(select(...))` then iterate `.scalars()`.
     """
+
     class ScalarResult:
         def __init__(self, rows):
             self._rows = rows
@@ -116,7 +117,10 @@ def test_list_indicator_templates(monkeypatch, reference_app) -> None:
     app, _session = reference_app
     rows = [
         IndicatorTemplate(
-            id=1, tema="Clima e Energia", indicador="Consumo total de energia", unidade="kWh/ano"
+            id=1,
+            tema="Clima e Energia",
+            indicador="Consumo total de energia",
+            unidade="kWh/ano",
         ),
     ]
     _patch_session_execute(monkeypatch, rows)

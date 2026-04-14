@@ -35,9 +35,7 @@ DOCUMENT_DIRECTORY_KEYS = {
 
 @pytest.fixture(scope="module")
 def migration_module():
-    spec = importlib.util.spec_from_file_location(
-        "seed_migration", MIGRATION_PATH
-    )
+    spec = importlib.util.spec_from_file_location("seed_migration", MIGRATION_PATH)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)

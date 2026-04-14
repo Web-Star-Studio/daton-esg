@@ -10,6 +10,8 @@ class GriStandard(Base):
     __tablename__ = "gri_standards"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    code: Mapped[str] = mapped_column(String(20), unique=True, nullable=False, index=True)
+    code: Mapped[str] = mapped_column(
+        String(20), unique=True, nullable=False, index=True
+    )
     family: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
     standard_text: Mapped[str] = mapped_column(Text, nullable=False)

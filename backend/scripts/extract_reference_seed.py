@@ -28,9 +28,7 @@ XLSX_PATH = (
 
 def _slugify(value: str) -> str:
     normalized = unicodedata.normalize("NFKD", value)
-    ascii_only = "".join(
-        char for char in normalized if not unicodedata.combining(char)
-    )
+    ascii_only = "".join(char for char in normalized if not unicodedata.combining(char))
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", ascii_only).strip("-").lower()
     return slug
 
@@ -139,9 +137,7 @@ def dump_ods(wb) -> tuple[list[dict], list[dict]]:
                         "meta_text": meta_text,
                     }
                 )
-    goals_out = [
-        {"ods_number": n, "objetivo": goals[n]} for n in sorted(goals)
-    ]
+    goals_out = [{"ods_number": n, "objetivo": goals[n]} for n in sorted(goals)]
     return goals_out, metas
 
 

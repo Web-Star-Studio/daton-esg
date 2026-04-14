@@ -70,10 +70,7 @@ function renderWorkspace(initialPath = '/projects/project-1') {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
-        <Route
-          path="/projects/:projectId"
-          element={<ProjectWorkspaceLayout />}
-        >
+        <Route path="/projects/:projectId" element={<ProjectWorkspaceLayout />}>
           <Route index element={<ProjectDetailPage />} />
         </Route>
       </Routes>
@@ -297,7 +294,9 @@ describe('agent drawer', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByText('Já há evidências indexadas.')).toBeInTheDocument()
+      expect(
+        screen.getByText('Já há evidências indexadas.')
+      ).toBeInTheDocument()
     })
   })
 
@@ -406,12 +405,12 @@ describe('agent drawer', () => {
     })
 
     // Open the thread picker.
-    fireEvent.click(screen.getByRole('button', { name: /selecionar conversa/i }))
+    fireEvent.click(
+      screen.getByRole('button', { name: /selecionar conversa/i })
+    )
 
     await waitFor(() => {
-      expect(
-        screen.getByText('Análise de materialidade')
-      ).toBeInTheDocument()
+      expect(screen.getByText('Análise de materialidade')).toBeInTheDocument()
     })
 
     // Click trash on the non-active thread.
@@ -501,12 +500,12 @@ describe('agent drawer', () => {
       expect(screen.getByText('Conteúdo do resumo.')).toBeInTheDocument()
     })
 
-    fireEvent.click(screen.getByRole('button', { name: /selecionar conversa/i }))
+    fireEvent.click(
+      screen.getByRole('button', { name: /selecionar conversa/i })
+    )
 
     await waitFor(() => {
-      expect(
-        screen.getByText('Análise de materialidade')
-      ).toBeInTheDocument()
+      expect(screen.getByText('Análise de materialidade')).toBeInTheDocument()
     })
 
     fireEvent.click(
@@ -528,9 +527,7 @@ describe('agent drawer', () => {
     })
 
     await waitFor(() => {
-      expect(
-        screen.getByText('Conteúdo de materialidade.')
-      ).toBeInTheDocument()
+      expect(screen.getByText('Conteúdo de materialidade.')).toBeInTheDocument()
     })
   })
 })

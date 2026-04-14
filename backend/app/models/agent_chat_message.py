@@ -2,7 +2,15 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, Text, func
+from sqlalchemy import (
+    DateTime,
+    Enum,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Integer,
+    Text,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -17,19 +25,25 @@ if TYPE_CHECKING:
 
 class AgentChatMessage(Base):
     __tablename__ = "agent_chat_messages"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["thread_id", "project_id"],
+            ["agent_chat_threads.id", "agent_chat_threads.project_id"],
+            name="fk_agent_chat_messages_thread_project",
+            ondelete="CASCADE",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     thread_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("agent_chat_threads.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
     project_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -69,6 +83,9 @@ class AgentChatMessage(Base):
     project: Mapped["Project"] = relationship(
         "Project",
         back_populates="agent_chat_messages",
+        primaryjoin="AgentChatMessage.project_id == Project.id",
+        foreign_keys="[AgentChatMessage.project_id]",
+        overlaps="thread,messages",
     )
     user: Mapped["User | None"] = relationship(
         "User",

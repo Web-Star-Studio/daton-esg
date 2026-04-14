@@ -47,3 +47,10 @@ line-length = 88
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/versions/20260413_0010_seed_reference_data.py" = ["E501"]
+"app/services/prompts/prompt_mestre.py" = ["E501"]
+"app/services/langgraph_report_graph.py" = ["E501"]
+"app/services/report_pipeline.py" = ["E501"]
+"alembic/versions/20260414_0011_*" = ["E501"]

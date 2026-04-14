@@ -39,9 +39,7 @@ from app.services.vocabulary_linter import lint as lint_vocabulary
 logger = logging.getLogger(__name__)
 
 _INLINE_GRI_PATTERN = re.compile(r"\(GRI\s+\d{1,3}-\d+[a-z]?\)", re.IGNORECASE)
-_GRI_CODE_EXTRACT_PATTERN = re.compile(
-    r"GRI\s+(\d{1,3})-(\d+[a-z]?)", re.IGNORECASE
-)
+_GRI_CODE_EXTRACT_PATTERN = re.compile(r"GRI\s+(\d{1,3})-(\d+[a-z]?)", re.IGNORECASE)
 _ENQUADRAMENTO_HEADER_PATTERN = re.compile(
     r"Enquadramento ESG e normativo", re.IGNORECASE
 )
@@ -231,10 +229,7 @@ def _build_user_prompt(state: ReportGraphState) -> str:
         f"[TEMAS MATERIAIS]\n{_format_material_topics(topics)}",
         f"[ODS PRIORITÁRIOS]\n{_format_sdg_goals(sdgs)}",
         f"[INDICADORES DISPONÍVEIS]\n{_format_indicators(state.get('project_indicators'))}",
-        (
-            "[EVIDÊNCIAS DA ORGANIZAÇÃO]\n"
-            f"{_format_project_chunks(chunks)}"
-        ),
+        (f"[EVIDÊNCIAS DA ORGANIZAÇÃO]\n{_format_project_chunks(chunks)}"),
         (
             "[CONTEXTO TÉCNICO GRI — referência conceitual, NÃO é evidência]\n"
             f"{_format_reference_chunks(reference_chunks)}"
@@ -260,7 +255,7 @@ def _build_user_prompt(state: ReportGraphState) -> str:
         "Integre os nove blocos lógicos em prosa contínua. Ao longo do texto, "
         "utilize códigos GRI relevantes no formato parentético inline: (GRI X-Y), "
         "onde X-Y deve ser um dos códigos listados acima. Finalize a seção com um "
-        "bloco destacado \"Enquadramento ESG e normativo\" seguido das quatro linhas "
+        'bloco destacado "Enquadramento ESG e normativo" seguido das quatro linhas '
         "(Pilares ESG, GRI aplicável, Referências técnicas, ODS relacionados).\n\n"
         "Quando a base de evidências da organização for fraca ou ausente, declare "
         "a limitação explicitamente no próprio texto; não preencha com conteúdo "
@@ -404,7 +399,9 @@ async def retrieve_section_context(state: ReportGraphState) -> dict[str, Any]:
 
     project_chunks: list[RetrievedKnowledgeChunk] = []
     seen_ids: set[str] = set()
-    per_query_top_k = max(3, settings.report_rag_top_k // max(1, len(template.rag_queries)))
+    per_query_top_k = max(
+        3, settings.report_rag_top_k // max(1, len(template.rag_queries))
+    )
     for query in template.rag_queries:
         for directory_key in template.directory_keys or (None,):
             try:
@@ -493,8 +490,10 @@ async def generate_section(state: ReportGraphState) -> dict[str, Any]:
             "_generation_error": str(exc),
         }
 
-    content = response.text() if callable(getattr(response, "text", None)) else str(
-        response.content
+    content = (
+        response.text()
+        if callable(getattr(response, "text", None))
+        else str(response.content)
     )
     usage = response.usage_metadata or {}
 
@@ -612,18 +611,19 @@ async def validate_and_persist(state: ReportGraphState) -> dict[str, Any]:
             }
         )
     elif word_count > max_target:
-        # truncate at the last paragraph before the soft limit
-        truncation_limit = max_target
-        cumulative = 0
-        for paragraph in cleaned_content.split("\n\n"):
-            paragraph_words = len(paragraph.split())
-            if cumulative + paragraph_words > truncation_limit:
+        # truncate at the last complete paragraph before the word limit
+        paragraphs = cleaned_content.split("\n\n")
+        cumulative_words = 0
+        keep_count = 0
+        for paragraph in paragraphs:
+            pw = len(paragraph.split())
+            if cumulative_words + pw > max_target and keep_count > 0:
                 break
-            cumulative += paragraph_words
-        truncated = "\n\n".join(cleaned_content.split("\n\n")[: max(1, cumulative)])
-        # fallback: simple truncate if paragraph-based failed
+            cumulative_words += pw
+            keep_count += 1
+        truncated = "\n\n".join(paragraphs[:keep_count])
         if not truncated.strip():
-            truncated = " ".join(words[: max_target])
+            truncated = " ".join(words[:max_target])
         cleaned_content = truncated
         word_count = len(cleaned_content.split())
 
@@ -641,18 +641,14 @@ async def validate_and_persist(state: ReportGraphState) -> dict[str, Any]:
     completed.append(section_payload)
 
     # update inline GRI evidence index
-    evidence_entries = _extract_gri_evidence(
-        cleaned_content, template.key, valid_codes
-    )
+    evidence_entries = _extract_gri_evidence(cleaned_content, template.key, valid_codes)
     for entry in evidence_entries:
         gri_evidence_index.setdefault(entry["code"], []).append(
             {"section_key": entry["section_key"], "excerpt": entry["excerpt"]}
         )
 
     # update prior summary (kept short)
-    prior_summary_lines = (
-        prior_summary.splitlines() if prior_summary else []
-    )
+    prior_summary_lines = prior_summary.splitlines() if prior_summary else []
     prior_summary_lines.append(_summarize_section_for_prior(section_payload))
     # cap at last 12 entries to keep context small
     prior_summary_lines = prior_summary_lines[-12:]
@@ -667,7 +663,9 @@ async def validate_and_persist(state: ReportGraphState) -> dict[str, Any]:
     )
 
     usage = state.get("_usage", {}) or {}
-    prompt_tokens = state.get("prompt_tokens", 0) + int(usage.get("input_tokens", 0) or 0)
+    prompt_tokens = state.get("prompt_tokens", 0) + int(
+        usage.get("input_tokens", 0) or 0
+    )
     completion_tokens = state.get("completion_tokens", 0) + int(
         usage.get("output_tokens", 0) or 0
     )
@@ -699,9 +697,7 @@ async def build_gri_index(state: ReportGraphState) -> dict[str, Any]:
 
     # build family from code
     family_by_code: dict[str, str] = {}
-    result = await session.execute(
-        select(GriStandard.code, GriStandard.family)
-    )
+    result = await session.execute(select(GriStandard.code, GriStandard.family))
     for row in result.all():
         family_by_code[row.code] = row.family
 
@@ -777,7 +773,7 @@ def _render_sumario_markdown(rows: list[dict[str, Any]]) -> str:
     parts: list[str] = [
         "O Sumário GRI abaixo consolida os códigos identificados ao longo do "
         "relato e as demais divulgações dos Padrões GRI 2021. Status "
-        "\"atendido\" indica evidência localizada no texto; \"não atendido\" "
+        '"atendido" indica evidência localizada no texto; "não atendido" '
         "indica que a divulgação correspondente não foi evidenciada nesta "
         "versão do relatório."
     ]
