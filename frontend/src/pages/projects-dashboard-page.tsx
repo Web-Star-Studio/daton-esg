@@ -5,7 +5,11 @@ import { projectRecordToFormValues } from '../components/project-form.utils'
 import { useAuth } from '../hooks/use-auth'
 import { PrimaryBtn } from '../components/primary-btn'
 import { ProjectStatusBadge } from '../components/project-status-badge'
-import { createProject, fetchProjects } from '../services/api-client'
+import {
+  archiveProject,
+  createProject,
+  fetchProjects,
+} from '../services/api-client'
 import type { ProjectRecord } from '../types/project'
 
 const STATUS_FILTER_OPTIONS = [
@@ -78,6 +82,8 @@ export function ProjectsDashboardPage() {
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [modalError, setModalError] = useState<string | null>(null)
   const [pageError, setPageError] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const profileMenuRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -179,6 +185,27 @@ export function ProjectsDashboardPage() {
       active = false
     }
   }, [search, status])
+
+  async function handleDeleteProject(projectId: string) {
+    if (deletingId) return
+    setDeletingId(projectId)
+    setPageError(null)
+    try {
+      await archiveProject(projectId)
+      setProjects((current) =>
+        current.filter((project) => project.id !== projectId)
+      )
+      setConfirmDeleteId(null)
+    } catch (error) {
+      setPageError(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível excluir o projeto.'
+      )
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   return (
     <div className="h-screen overflow-hidden bg-[#e8e8ed] font-display text-[#1d1d1f] antialiased">
@@ -364,8 +391,11 @@ export function ProjectsDashboardPage() {
                       <th className="h-10 w-[25%] border-b border-[#e5e5ea] px-6 align-middle text-[12px] font-medium uppercase tracking-[0.5px] text-[#86868b]">
                         Status
                       </th>
-                      <th className="h-10 w-[20%] border-b border-[#e5e5ea] px-6 align-middle text-right text-[12px] font-medium uppercase tracking-[0.5px] text-[#86868b]">
+                      <th className="h-10 w-[15%] border-b border-[#e5e5ea] px-6 align-middle text-right text-[12px] font-medium uppercase tracking-[0.5px] text-[#86868b]">
                         Atualização
+                      </th>
+                      <th className="h-10 w-[60px] border-b border-[#e5e5ea] px-2 align-middle text-[12px] font-medium uppercase tracking-[0.5px] text-[#86868b]">
+                        <span className="sr-only">Ações</span>
                       </th>
                     </tr>
                   </thead>
@@ -402,6 +432,50 @@ export function ProjectsDashboardPage() {
                           </td>
                           <td className="h-12 px-6 align-middle text-right text-sm text-[#86868b]">
                             {formatUpdatedAt(project.updated_at)}
+                          </td>
+                          <td
+                            className="h-12 px-2 align-middle"
+                            onClick={(event) => event.stopPropagation()}
+                            onKeyDown={(event) => event.stopPropagation()}
+                          >
+                            {confirmDeleteId === project.id ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    void handleDeleteProject(project.id)
+                                  }}
+                                  disabled={deletingId === project.id}
+                                  className="apple-focus-ring rounded px-1.5 py-0.5 text-[10px] font-medium text-[#d01f1f] transition hover:bg-[#fff0f0] disabled:opacity-50"
+                                  aria-label={`Confirmar exclusão de ${project.org_name}`}
+                                >
+                                  {deletingId === project.id ? '…' : 'Excluir'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteId(null)}
+                                  disabled={deletingId === project.id}
+                                  className="apple-focus-ring rounded px-1.5 py-0.5 text-[10px] font-medium text-[#86868b] transition hover:bg-black/5 disabled:opacity-50"
+                                  aria-label="Cancelar exclusão"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(project.id)}
+                                className="apple-focus-ring inline-flex size-7 items-center justify-center rounded text-[#9b9ba1] opacity-0 transition hover:bg-black/5 hover:text-[#d01f1f] focus:opacity-100 group-hover:opacity-100"
+                                aria-label={`Excluir projeto ${project.org_name}`}
+                              >
+                                <span
+                                  aria-hidden="true"
+                                  className="material-symbols-outlined text-[16px]"
+                                >
+                                  delete
+                                </span>
+                              </button>
+                            )}
                           </td>
                         </tr>
                       )

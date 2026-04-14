@@ -237,10 +237,10 @@ def test_patch_project_updates_project(monkeypatch, projects_app) -> None:
     assert response.json()["status"] == "analyzing"
 
 
-def test_delete_project_archives_project(monkeypatch, projects_app) -> None:
+def test_delete_project_cascade(monkeypatch, projects_app) -> None:
     app, session, user = projects_app
     project = make_project(user)
-    projects_app_project = project
+    delete_calls: list[dict] = []
 
     async def fake_get_project_for_user(_session, _project_id, _user_id):
         assert _session is session
@@ -248,21 +248,21 @@ def test_delete_project_archives_project(monkeypatch, projects_app) -> None:
         assert _user_id == user.id
         return project
 
-    async def fake_archive_project(_session: DummySession, *, project: Project):
-        assert _session is session
-        assert project.id == projects_app_project.id
-        return project
+    async def fake_delete_project_cascade(_session, *, project: Project):
+        delete_calls.append({"project_id": project.id})
 
     monkeypatch.setattr(
         "app.api.projects.get_project_for_user",
         fake_get_project_for_user,
     )
     monkeypatch.setattr(
-        "app.api.projects.archive_project",
-        fake_archive_project,
+        "app.api.projects.delete_project_cascade",
+        fake_delete_project_cascade,
     )
 
     with TestClient(app) as client:
         response = client.delete(f"/api/v1/projects/{project.id}")
 
     assert response.status_code == 204
+    assert len(delete_calls) == 1
+    assert delete_calls[0]["project_id"] == project.id

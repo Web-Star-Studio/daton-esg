@@ -67,6 +67,9 @@ class VectorStore:
             return
         self._index.delete(namespace=namespace, ids=ids)
 
+    def _delete_namespace(self, *, namespace: str) -> None:
+        self._index.delete(namespace=namespace, delete_all=True)
+
     async def delete(
         self,
         *,
@@ -74,6 +77,10 @@ class VectorStore:
         ids: list[str],
     ) -> None:
         await asyncio.to_thread(self._delete, namespace=namespace, ids=ids)
+
+    async def delete_namespace(self, *, namespace: str) -> None:
+        """Delete all vectors in a namespace (wipes the entire namespace)."""
+        await asyncio.to_thread(self._delete_namespace, namespace=namespace)
 
     def _update_metadata(
         self,
