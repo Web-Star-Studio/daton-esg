@@ -25,7 +25,11 @@ from app.core.config import Settings, get_settings
 from app.models import Project, Report
 from app.models.enums import ReportStatus
 from app.services.docx_export_service import generate_report_docx
-from app.services.report_pipeline import SSEEvent, run_report_pipeline
+from app.services.report_pipeline import (
+    SSEEvent,
+    run_report_pipeline,
+    run_single_section_pipeline,
+)
 from app.services.report_sections import REPORT_SECTIONS
 from app.services.storage_service import StorageService, get_storage_service
 
@@ -211,6 +215,7 @@ async def stream_report_generation(
     project: Project,
     report: Report,
     settings: Settings | None = None,
+    section_keys: set[str] | None = None,
 ) -> AsyncGenerator[bytes, None]:
     """Run the multi-agent report pipeline, yielding SSE events as agents
     produce them via a shared asyncio.Queue.
@@ -241,6 +246,7 @@ async def stream_report_generation(
             report_id=report.id,
             settings=current_settings,
             event_queue=event_queue,
+            section_keys=section_keys,
         )
     )
 
@@ -318,6 +324,92 @@ async def stream_report_generation(
     yield _sse_event(
         "report_completed",
         {
+            "report": _report_to_payload(final) if final else None,
+        },
+    )
+
+
+async def stream_section_regeneration(
+    session: AsyncSession,
+    *,
+    project: Project,
+    report: Report,
+    section_key: str,
+    settings: Settings | None = None,
+) -> AsyncGenerator[bytes, None]:
+    """Regenerate a single section of an existing report, yielding SSE events."""
+    current_settings = settings or get_settings()
+    event_queue: asyncio.Queue[SSEEvent | None] = asyncio.Queue()
+
+    yield _sse_event(
+        "section_regeneration_started",
+        {"report_id": str(report.id), "section_key": section_key},
+    )
+
+    pipeline_task = asyncio.create_task(
+        run_single_section_pipeline(
+            project=project,
+            report_id=report.id,
+            section_key=section_key,
+            event_queue=event_queue,
+            settings=current_settings,
+        )
+    )
+
+    try:
+        while True:
+            q_get: asyncio.Task[SSEEvent | None] = asyncio.create_task(
+                event_queue.get()
+            )
+            done, _pending = await asyncio.wait(
+                {q_get, pipeline_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if pipeline_task in done and q_get not in done:
+                q_get.cancel()
+                exc = pipeline_task.exception()
+                if exc:
+                    raise exc
+                break
+            event = q_get.result()
+            if event is None:
+                break
+            yield _sse_event(event.event_type, event.data)
+    except Exception as exc:
+        logger.exception(
+            "report.section_regen_failed",
+            extra={
+                "project_id": str(project.id),
+                "report_id": str(report.id),
+                "section_key": section_key,
+            },
+        )
+        yield _sse_event(
+            "section_failed",
+            {
+                "section_key": section_key,
+                "error": (
+                    str(exc)
+                    if current_settings.environment == "development"
+                    else "Falha ao regenerar a secao."
+                ),
+            },
+        )
+        return
+    finally:
+        if not pipeline_task.done():
+            pipeline_task.cancel()
+            try:
+                await pipeline_task
+            except (asyncio.CancelledError, Exception):
+                pass
+
+    # Return the updated report
+    final = await get_report_detail(session, project_id=project.id, report_id=report.id)
+    yield _sse_event(
+        "section_regeneration_completed",
+        {
+            "section_key": section_key,
             "report": _report_to_payload(final) if final else None,
         },
     )

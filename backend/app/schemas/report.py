@@ -78,3 +78,10 @@ class ReportResponse(BaseModel):
 
 class ReportSectionUpdateRequest(BaseModel):
     content: str = Field(min_length=1)
+
+
+class GenerateReportRequest(BaseModel):
+    """Optional body for POST /generate. If section_keys is provided,
+    only those sections are generated. If omitted or empty, all sections run."""
+
+    section_keys: list[str] | None = None

@@ -9,6 +9,7 @@ import {
   fetchReport,
   fetchReports,
   streamReportGeneration,
+  streamSectionRegeneration,
   updateReportSection,
 } from '../services/api-client'
 import type {
@@ -30,6 +31,23 @@ type PipelineSection = {
   griCodesUsed?: string[]
   streamingText: string
 }
+
+const ALL_SECTION_KEYS: Array<{ key: string; title: string; order: number }> = [
+  { key: 'a-empresa', title: 'A Empresa', order: 1 },
+  { key: 'visao-estrategia', title: 'Visao e Estrategia', order: 2 },
+  { key: 'governanca', title: 'Governanca Corporativa', order: 3 },
+  { key: 'gestao-ambiental', title: 'Gestao Ambiental', order: 4 },
+  { key: 'desempenho-social', title: 'Desempenho Social', order: 5 },
+  { key: 'desempenho-economico', title: 'Desempenho Economico', order: 6 },
+  { key: 'stakeholders', title: 'Stakeholders', order: 7 },
+  { key: 'inovacao', title: 'Inovacao', order: 8 },
+  { key: 'auditorias', title: 'Auditorias', order: 9 },
+  { key: 'comunicacao', title: 'Comunicacao', order: 10 },
+  { key: 'temas-materiais', title: 'Temas Materiais', order: 11 },
+  { key: 'plano-acao', title: 'Plano de Acao', order: 12 },
+  { key: 'alinhamento-ods', title: 'Alinhamento ODS', order: 13 },
+  { key: 'sumario-gri', title: 'Sumario GRI', order: 14 },
+]
 
 const STATUS_LABELS: Record<ReportStatus, string> = {
   generating: 'Gerando',
@@ -172,10 +190,18 @@ type SectionEditorHandle = {
 type SectionEditorProps = {
   section: ReportSection
   onSave: (content: string) => Promise<void>
+  onRegenerate?: () => void
+  isRegenerating?: boolean
   handleRef?: React.MutableRefObject<SectionEditorHandle | null>
 }
 
-function SectionEditor({ section, onSave, handleRef }: SectionEditorProps) {
+function SectionEditor({
+  section,
+  onSave,
+  onRegenerate,
+  isRegenerating,
+  handleRef,
+}: SectionEditorProps) {
   const [draft, setDraft] = useState(section.content)
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -250,9 +276,32 @@ function SectionEditor({ section, onSave, handleRef }: SectionEditorProps) {
                 : ''}
           </p>
         </div>
-        <span className="text-[11px] tracking-[-0.01em] text-[#9b9ba1]">
-          {isSaving ? 'Salvando…' : 'Alterações são salvas ao sair do campo'}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] tracking-[-0.01em] text-[#9b9ba1]">
+            {isSaving
+              ? 'Salvando…'
+              : isRegenerating
+                ? 'Regenerando…'
+                : 'Alterações são salvas ao sair do campo'}
+          </span>
+          {onRegenerate ? (
+            <button
+              type="button"
+              onClick={onRegenerate}
+              disabled={isRegenerating || isSaving}
+              className="apple-focus-ring inline-flex items-center gap-1 rounded-full border border-black/10 px-2.5 py-1 text-[11px] font-medium tracking-[-0.01em] text-[#1d1d1f] transition hover:border-black/20 hover:bg-black/[0.03] disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label={`Regenerar seção ${section.title}`}
+            >
+              <span
+                aria-hidden="true"
+                className={`material-symbols-outlined text-[14px] ${isRegenerating ? 'animate-spin' : ''}`}
+              >
+                refresh
+              </span>
+              Regenerar
+            </button>
+          ) : null}
+        </div>
       </div>
       {saveError ? (
         <p className="mb-2 text-[11px] font-medium tracking-[-0.01em] text-[#d01f1f]">
@@ -370,8 +419,7 @@ function GenerationProgress({
 type Tab = 'sections' | 'gri' | 'gaps'
 
 export function ProjectGenerationPage() {
-  const { currentProjectId, openAgentDrawer, project, workspaceError } =
-    useProjectWorkspace()
+  const { currentProjectId, project, workspaceError } = useProjectWorkspace()
 
   useProjectShellRegistration({
     activeSidebarKey: 'generation',
@@ -392,7 +440,29 @@ export function ProjectGenerationPage() {
   const [activeTab, setActiveTab] = useState<Tab>('sections')
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
   const [isExporting, setIsExporting] = useState(false)
+  const [regeneratingKey, setRegeneratingKey] = useState<string | null>(null)
+  const [selectedSectionKeys, setSelectedSectionKeys] = useState<Set<string>>(
+    () => new Set(ALL_SECTION_KEYS.map((s) => s.key))
+  )
+  const [showSectionPicker, setShowSectionPicker] = useState(false)
+  const sectionPickerRef = useRef<HTMLDivElement>(null)
   const editorHandleRef = useRef<SectionEditorHandle | null>(null)
+
+  useEffect(() => {
+    if (!showSectionPicker) return
+    function handlePointerDown(event: PointerEvent) {
+      if (
+        sectionPickerRef.current &&
+        !sectionPickerRef.current.contains(event.target as Node)
+      ) {
+        setShowSectionPicker(false)
+      }
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+    }
+  }, [showSectionPicker])
 
   const materialTopics = Array.isArray(project?.material_topics)
     ? project.material_topics
@@ -467,67 +537,75 @@ export function ProjectGenerationPage() {
     setPipeline([])
     setActiveSectionKey(null)
     try {
-      await streamReportGeneration(currentProjectId, {
-        onReportStarted: (data) => {
-          setPipeline(
-            data.sections.map((section) => ({
-              key: section.key,
-              title: section.title,
-              order: section.order,
-              state: 'pending',
-              streamingText: '',
-            }))
-          )
-        },
-        onSectionStarted: (data) => {
-          setActiveSectionKey(data.section_key)
-          setPipeline((current) =>
-            current.map((entry) =>
-              entry.key === data.section_key
-                ? { ...entry, state: 'running', streamingText: '' }
-                : entry
+      const keysToGenerate =
+        selectedSectionKeys.size < ALL_SECTION_KEYS.length
+          ? [...selectedSectionKeys]
+          : undefined
+      await streamReportGeneration(
+        currentProjectId,
+        {
+          onReportStarted: (data) => {
+            setPipeline(
+              data.sections.map((section) => ({
+                key: section.key,
+                title: section.title,
+                order: section.order,
+                state: 'pending',
+                streamingText: '',
+              }))
             )
-          )
-        },
-        onSectionToken: (data) => {
-          setPipeline((current) =>
-            current.map((entry) =>
-              entry.key === data.section_key
-                ? {
-                    ...entry,
-                    streamingText: entry.streamingText + data.text,
-                  }
-                : entry
+          },
+          onSectionStarted: (data) => {
+            setActiveSectionKey(data.section_key)
+            setPipeline((current) =>
+              current.map((entry) =>
+                entry.key === data.section_key
+                  ? { ...entry, state: 'running', streamingText: '' }
+                  : entry
+              )
             )
-          )
-        },
-        onSectionCompleted: (data) => {
-          setPipeline((current) =>
-            current.map((entry) =>
-              entry.key === data.section_key
-                ? {
-                    ...entry,
-                    state: data.status === 'failed' ? 'failed' : 'completed',
-                    wordCount: data.word_count,
-                    griCodesUsed: data.gri_codes_used,
-                  }
-                : entry
+          },
+          onSectionToken: (data) => {
+            setPipeline((current) =>
+              current.map((entry) =>
+                entry.key === data.section_key
+                  ? {
+                      ...entry,
+                      streamingText: entry.streamingText + data.text,
+                    }
+                  : entry
+              )
             )
-          )
+          },
+          onSectionCompleted: (data) => {
+            setPipeline((current) =>
+              current.map((entry) =>
+                entry.key === data.section_key
+                  ? {
+                      ...entry,
+                      state: data.status === 'failed' ? 'failed' : 'completed',
+                      wordCount: data.word_count,
+                      griCodesUsed: data.gri_codes_used,
+                    }
+                  : entry
+              )
+            )
+          },
+          onReportCompleted: (data) => {
+            if (data.report) {
+              setActiveReport(data.report)
+              const firstKey = data.report.sections?.[0]?.key ?? null
+              setSelectedSectionKey(firstKey)
+              setActiveTab('sections')
+            }
+            void loadReports(false)
+          },
+          onReportFailed: (data) => {
+            setPageError(data.message)
+          },
         },
-        onReportCompleted: (data) => {
-          if (data.report) {
-            setActiveReport(data.report)
-            const firstKey = data.report.sections?.[0]?.key ?? null
-            setSelectedSectionKey(firstKey)
-            setActiveTab('sections')
-          }
-          void loadReports(false)
-        },
-        onReportFailed: (data) => {
-          setPageError(data.message)
-        },
-      })
+        keysToGenerate
+      )
     } catch (error) {
       setPageError(
         error instanceof Error
@@ -548,6 +626,44 @@ export function ProjectGenerationPage() {
       content
     )
     setActiveReport(updated)
+  }
+
+  async function handleRegenerateSection(sectionKey: string) {
+    if (!currentProjectId || !activeReport || regeneratingKey) return
+    setRegeneratingKey(sectionKey)
+    setPageError(null)
+    try {
+      await streamSectionRegeneration(
+        currentProjectId,
+        activeReport.id,
+        sectionKey,
+        {
+          onSectionToken: () => {
+            // streaming preview could be added here
+          },
+          onSectionCompleted: () => {},
+          onReportCompleted: (data) => {
+            if (data.report) {
+              setActiveReport(data.report)
+            }
+          },
+          onReportFailed: (data) => {
+            setPageError(data.message)
+          },
+        }
+      )
+      // Refresh the report to get the updated section
+      if (currentProjectId && activeReport) {
+        const refreshed = await fetchReport(currentProjectId, activeReport.id)
+        setActiveReport(refreshed)
+      }
+    } catch (error) {
+      setPageError(
+        error instanceof Error ? error.message : 'Falha ao regenerar a secao.'
+      )
+    } finally {
+      setRegeneratingKey(null)
+    }
   }
 
   async function handleExport() {
@@ -607,14 +723,96 @@ export function ProjectGenerationPage() {
               {isExporting ? 'Gerando…' : 'Exportar Word'}
             </button>
           ) : null}
-          <button
-            type="button"
-            onClick={handleGenerate}
-            disabled={isGenerating || !hasMaterialTopics || !currentProjectId}
-            className="apple-focus-ring rounded-full bg-[#0f1923] px-4 py-2 text-[12px] font-medium text-white transition hover:bg-[#1a2632] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isGenerating ? 'Gerando…' : 'Gerar Relatório'}
-          </button>
+          <div ref={sectionPickerRef} className="relative">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={handleGenerate}
+                disabled={
+                  isGenerating ||
+                  !hasMaterialTopics ||
+                  !currentProjectId ||
+                  selectedSectionKeys.size === 0
+                }
+                className="apple-focus-ring rounded-l-full bg-[#0f1923] px-4 py-2 text-[12px] font-medium text-white transition hover:bg-[#1a2632] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isGenerating
+                  ? 'Gerando…'
+                  : selectedSectionKeys.size < ALL_SECTION_KEYS.length
+                    ? `Gerar ${selectedSectionKeys.size} seções`
+                    : 'Gerar Relatório'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowSectionPicker((v) => !v)}
+                disabled={isGenerating}
+                className="apple-focus-ring rounded-r-full border-l border-white/20 bg-[#0f1923] px-2 py-2 text-white transition hover:bg-[#1a2632] disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Selecionar seções para gerar"
+              >
+                <span
+                  aria-hidden="true"
+                  className="material-symbols-outlined text-[14px]"
+                >
+                  expand_more
+                </span>
+              </button>
+            </div>
+            {showSectionPicker ? (
+              <div className="absolute right-0 top-full z-20 mt-2 w-[300px] rounded-lg border border-black/10 bg-white p-3 shadow-[rgba(0,0,0,0.12)_0px_8px_24px]">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#6b6b72]">
+                    Seções a gerar
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        selectedSectionKeys.size === ALL_SECTION_KEYS.length
+                      ) {
+                        setSelectedSectionKeys(new Set())
+                      } else {
+                        setSelectedSectionKeys(
+                          new Set(ALL_SECTION_KEYS.map((s) => s.key))
+                        )
+                      }
+                    }}
+                    className="text-[10px] font-medium text-[#0673e0] hover:underline"
+                  >
+                    {selectedSectionKeys.size === ALL_SECTION_KEYS.length
+                      ? 'Desmarcar todas'
+                      : 'Marcar todas'}
+                  </button>
+                </div>
+                <ul className="max-h-[320px] space-y-0.5 overflow-y-auto">
+                  {ALL_SECTION_KEYS.map((s) => (
+                    <li key={s.key}>
+                      <label className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[12px] tracking-[-0.01em] text-[#1d1d1f] hover:bg-black/[0.03]">
+                        <input
+                          type="checkbox"
+                          checked={selectedSectionKeys.has(s.key)}
+                          onChange={() => {
+                            setSelectedSectionKeys((prev) => {
+                              const next = new Set(prev)
+                              if (next.has(s.key)) {
+                                next.delete(s.key)
+                              } else {
+                                next.add(s.key)
+                              }
+                              return next
+                            })
+                          }}
+                          className="h-3.5 w-3.5 accent-[#0673e0]"
+                        />
+                        <span>
+                          {s.order}. {s.title}
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
         </div>
       </header>
 
@@ -652,14 +850,6 @@ export function ProjectGenerationPage() {
             <h3 className="text-[13px] font-medium tracking-[-0.01em] text-[#1d1d1f]">
               Versões
             </h3>
-            <button
-              type="button"
-              onClick={openAgentDrawer}
-              className="apple-focus-ring rounded-full border border-black/10 px-2.5 py-1 text-[11px] font-medium tracking-[-0.01em] text-[#1d1d1f] hover:border-black/20"
-              aria-label="Abrir agente"
-            >
-              Agente
-            </button>
           </div>
           {isLoadingReports ? (
             <p className="text-[12px] tracking-[-0.01em] text-[#9b9ba1]">
@@ -787,6 +977,10 @@ export function ProjectGenerationPage() {
                         onSave={(content) =>
                           handleSaveSection(selectedSection.key, content)
                         }
+                        onRegenerate={() =>
+                          handleRegenerateSection(selectedSection.key)
+                        }
+                        isRegenerating={regeneratingKey === selectedSection.key}
                         handleRef={editorHandleRef}
                       />
                     ) : (
