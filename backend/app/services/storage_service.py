@@ -122,6 +122,44 @@ class StorageService:
             expires_in_seconds=expires_in_seconds,
         )
 
+    def _delete_objects_by_prefix(self, *, prefix: str) -> int:
+        """Delete all S3 objects under a prefix. Returns count deleted.
+
+        Inspects the delete_objects response for partial failures and
+        logs them rather than silently ignoring.
+        """
+        import logging
+
+        s3_logger = logging.getLogger(__name__)
+        deleted = 0
+        paginator = self._client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=self.bucket_name, Prefix=prefix):
+            objects = page.get("Contents", [])
+            if not objects:
+                continue
+            delete_keys = [{"Key": obj["Key"]} for obj in objects]
+            response = self._client.delete_objects(
+                Bucket=self.bucket_name,
+                Delete={"Objects": delete_keys, "Quiet": True},
+            )
+            deleted += len(response.get("Deleted", []))
+            errors = response.get("Errors", [])
+            if errors:
+                s3_logger.warning(
+                    "s3.delete_objects_partial_failure",
+                    extra={
+                        "bucket": self.bucket_name,
+                        "prefix": prefix,
+                        "error_count": len(errors),
+                        "errors": errors[:5],
+                    },
+                )
+        return deleted
+
+    async def delete_objects_by_prefix(self, *, prefix: str) -> int:
+        """Delete all S3 objects under a prefix. Returns count deleted."""
+        return await asyncio.to_thread(self._delete_objects_by_prefix, prefix=prefix)
+
 
 @cache
 def get_storage_service() -> StorageService:

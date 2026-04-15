@@ -261,7 +261,9 @@ def test_generate_report_streams_sse(monkeypatch, reports_app) -> None:
     async def fake_create_report(_session, *, project_id):
         return report
 
-    async def fake_stream(_session, *, project, report, settings=None):
+    async def fake_stream(
+        _session, *, project, report, settings=None, section_keys=None
+    ):
         yield b'event: report_started\ndata: {"version":1}\n\n'
         yield b'event: section_started\ndata: {"section_key":"a-empresa"}\n\n'
         yield (

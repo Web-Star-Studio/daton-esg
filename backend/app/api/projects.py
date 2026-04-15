@@ -9,8 +9,8 @@ from app.models import User
 from app.models.enums import ProjectStatus
 from app.schemas import ProjectCreate, ProjectResponse, ProjectUpdate
 from app.services.project_service import (
-    archive_project,
     create_project_for_user,
+    delete_project_cascade,
     get_project_for_user,
     list_projects_for_user,
     update_project,
@@ -81,6 +81,10 @@ async def delete_project(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> Response:
+    """Hard-delete a project with full cascade: Pinecone namespace wipe,
+    S3 objects deletion, and DB cascade (documents, reports, threads,
+    messages, RAG chunks).
+    """
     project = await get_project_for_user(session, project_id, current_user.id)
-    await archive_project(session, project=project)
+    await delete_project_cascade(session, project=project)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

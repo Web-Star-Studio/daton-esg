@@ -530,9 +530,12 @@ async def run_report_pipeline(
     report_id: UUID,
     settings: Settings | None = None,
     event_queue: asyncio.Queue[SSEEvent | None],
+    section_keys: set[str] | None = None,
 ) -> None:
     """Two-phase multi-agent pipeline: parallel Phase 1 → sequential Phase 2 →
     deterministic Phase 3 → finalize.
+
+    If ``section_keys`` is provided, only generates those sections (subset).
 
     On unexpected fatal failure, marks the report as FAILED with a gap entry
     and re-raises so the SSE layer can emit ``report_failed``.
@@ -543,6 +546,7 @@ async def run_report_pipeline(
             report_id=report_id,
             settings=settings,
             event_queue=event_queue,
+            section_keys=section_keys,
         )
     except Exception:
         logger.exception(
@@ -573,12 +577,123 @@ async def run_report_pipeline(
         raise
 
 
+async def run_single_section_pipeline(
+    *,
+    project: Project,
+    report_id: UUID,
+    section_key: str,
+    event_queue: asyncio.Queue[SSEEvent | None],
+    settings: Settings | None = None,
+) -> None:
+    """Generate (or regenerate) a single section of an existing report.
+
+    Loads context, finds the template, builds prior_sections_summary from
+    existing sections in the report, runs the agent, replaces/appends the
+    section in the JSONB, and sends the sentinel.
+    """
+    current_settings = settings or get_settings()
+    timeout = current_settings.report_agent_timeout_seconds
+
+    template = None
+    for t in REPORT_SECTIONS:
+        if t.key == section_key:
+            template = t
+            break
+    if template is None:
+        await event_queue.put(None)
+        raise ValueError(f"Unknown section key: {section_key}")
+
+    async with SessionLocal() as session:
+        ctx = await load_pipeline_context(
+            session,
+            project=project,
+            report_id=report_id,
+            settings=current_settings,
+        )
+
+    # Build prior summary from existing sections in the report
+    prior_summary = ""
+    async with SessionLocal() as session:
+        report = await session.get(Report, report_id)
+        if report and isinstance(report.sections, list):
+            summaries = [
+                _summarize_section_for_prior(sec)
+                for sec in report.sections
+                if isinstance(sec, dict)
+                and sec.get("key") != section_key
+                and sec.get("status") != "failed"
+            ]
+            prior_summary = "\n".join(summaries[-12:])
+
+    try:
+        result = await asyncio.wait_for(
+            run_single_agent(
+                template=template,
+                ctx=ctx,
+                prior_sections_summary=prior_summary,
+                event_queue=event_queue,
+            ),
+            timeout=timeout,
+        )
+    except asyncio.TimeoutError:
+        result = AgentResult(
+            section_payload={
+                "key": template.key,
+                "title": template.title,
+                "order": template.order,
+                "heading_level": template.heading_level,
+                "content": "",
+                "gri_codes_used": [],
+                "word_count": 0,
+                "status": "failed",
+            },
+            gaps=[
+                {
+                    "section_key": template.key,
+                    "category": "generation_error",
+                    "detail": f"agente excedeu timeout de {timeout}s",
+                }
+            ],
+        )
+
+    # Replace or append the section in the report
+    async with SessionLocal() as session:
+        report = await session.get(Report, report_id)
+        if report is not None:
+            existing = list(report.sections or [])
+            replaced = False
+            new_sections = []
+            for sec in existing:
+                if isinstance(sec, dict) and sec.get("key") == section_key:
+                    new_sections.append(result.section_payload)
+                    replaced = True
+                else:
+                    new_sections.append(sec)
+            if not replaced:
+                new_sections.append(result.section_payload)
+            # merge gaps
+            existing_gaps = list(report.gaps or [])
+            # remove old gaps for this section
+            existing_gaps = [
+                g
+                for g in existing_gaps
+                if not (isinstance(g, dict) and g.get("section_key") == section_key)
+            ]
+            existing_gaps.extend(result.gaps)
+            report.sections = new_sections
+            report.gaps = existing_gaps
+            await session.commit()
+
+    await event_queue.put(None)
+
+
 async def _run_report_pipeline_inner(
     *,
     project: Project,
     report_id: UUID,
     settings: Settings | None = None,
     event_queue: asyncio.Queue[SSEEvent | None],
+    section_keys: set[str] | None = None,
 ) -> None:
     """Inner implementation — separated so the outer wrapper handles fatal errors."""
     current_settings = settings or get_settings()
@@ -591,9 +706,19 @@ async def _run_report_pipeline_inner(
             session, project=project, report_id=report_id, settings=current_settings
         )
 
-    templates_phase1 = [t for t in REPORT_SECTIONS if t.key in _PHASE1_KEYS]
-    templates_phase2 = [t for t in REPORT_SECTIONS if t.key in _PHASE2_KEYS]
-    templates_phase3 = [t for t in REPORT_SECTIONS if t.key in _PHASE3_KEYS]
+    # filter templates if partial generation requested
+    def _in_scope(key: str) -> bool:
+        return section_keys is None or key in section_keys
+
+    templates_phase1 = [
+        t for t in REPORT_SECTIONS if t.key in _PHASE1_KEYS and _in_scope(t.key)
+    ]
+    templates_phase2 = [
+        t for t in REPORT_SECTIONS if t.key in _PHASE2_KEYS and _in_scope(t.key)
+    ]
+    templates_phase3 = [
+        t for t in REPORT_SECTIONS if t.key in _PHASE3_KEYS and _in_scope(t.key)
+    ]
 
     all_sections: list[dict[str, Any]] = []
     all_gaps: list[dict[str, Any]] = []

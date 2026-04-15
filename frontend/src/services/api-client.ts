@@ -158,7 +158,7 @@ export async function updateProject(
   return (await response.json()) as ProjectRecord
 }
 
-export async function archiveProject(projectId: string) {
+export async function deleteProject(projectId: string) {
   const response = await apiFetch(`/api/v1/projects/${projectId}`, {
     method: 'DELETE',
   })
@@ -166,10 +166,13 @@ export async function archiveProject(projectId: string) {
   if (!response.ok) {
     throw await parseApiError(
       response,
-      `Falha ao arquivar o projeto (${response.status}).`
+      `Falha ao excluir o projeto (${response.status}).`
     )
   }
 }
+
+/** @deprecated Use deleteProject instead. */
+export const archiveProject = deleteProject
 
 export async function fetchProjectDocuments(
   projectId: string,
@@ -710,16 +713,69 @@ function _processReportSseChunk(
 
 export async function streamReportGeneration(
   projectId: string,
-  handlers: ReportStreamHandlers
+  handlers: ReportStreamHandlers,
+  sectionKeys?: string[]
 ) {
+  const body =
+    sectionKeys && sectionKeys.length > 0
+      ? JSON.stringify({ section_keys: sectionKeys })
+      : undefined
   const response = await apiFetch(
     `/api/v1/projects/${projectId}/reports/generate`,
-    { method: 'POST' }
+    {
+      method: 'POST',
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body,
+    }
   )
   if (!response.ok) {
     throw await parseApiError(
       response,
       `Falha ao iniciar a geração do relatório (${response.status}).`
+    )
+  }
+  if (!response.body) {
+    throw new Error('O backend não retornou um stream válido.')
+  }
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { value, done } = await reader.read()
+    buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done })
+    let boundary = buffer.indexOf('\n\n')
+    while (boundary >= 0) {
+      const rawChunk = buffer.slice(0, boundary).trim()
+      buffer = buffer.slice(boundary + 2)
+      if (rawChunk) {
+        _processReportSseChunk(rawChunk, handlers)
+      }
+      boundary = buffer.indexOf('\n\n')
+    }
+    if (done) {
+      const finalChunk = buffer.trim()
+      if (finalChunk) {
+        _processReportSseChunk(finalChunk, handlers)
+      }
+      break
+    }
+  }
+}
+
+export async function streamSectionRegeneration(
+  projectId: string,
+  reportId: string,
+  sectionKey: string,
+  handlers: ReportStreamHandlers
+) {
+  const response = await apiFetch(
+    `/api/v1/projects/${projectId}/reports/${reportId}/sections/${sectionKey}/generate`,
+    { method: 'POST' }
+  )
+  if (!response.ok) {
+    throw await parseApiError(
+      response,
+      `Falha ao regenerar a seção (${response.status}).`
     )
   }
   if (!response.body) {
