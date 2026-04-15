@@ -11,6 +11,7 @@ LLM, RAG, and DB are faked — these tests verify orchestration logic:
 from __future__ import annotations
 
 import asyncio
+from typing import cast
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
@@ -188,6 +189,7 @@ async def test_run_single_agent_handles_missing_profile() -> None:
 
     assert result.section_payload["status"] == "failed"
     assert len(result.gaps) == 1
+    assert result.gaps[0]["group"] == "generation_issue"
     assert "perfil" in result.gaps[0]["detail"].lower()
 
 
@@ -235,6 +237,94 @@ async def test_run_single_agent_strips_invalid_gri_codes() -> None:
     assert "GRI 2-1" in result.section_payload["gri_codes_used"]
     gap_details = [g["detail"] for g in result.gaps]
     assert any("999-99" in d for d in gap_details)
+    assert any(g["group"] == "content_gap" for g in result.gaps)
+    assert any(g.get("priority") == "medium" for g in result.gaps)
+    assert any(
+        g.get("related_gri_codes") == ["GRI 2-1", "GRI 2-2", "GRI 2-6"]
+        for g in result.gaps
+    )
+
+
+@pytest.mark.asyncio
+async def test_run_single_agent_removes_inline_gap_diagnostics() -> None:
+    ctx = _make_context()
+    template = _get_template("a-empresa")
+    queue: asyncio.Queue[SSEEvent | None] = asyncio.Queue()
+
+    fake_llm = FakeLLM(
+        chunks=[
+            (
+                "A organizacao (GRI 2-1) foi fundada em 2016 e opera no setor "
+                "de logistica. A ausência de dados quantitativos específicos "
+                "limita a profundidade da análise.\n\n"
+            ),
+            (
+                "No entanto, não foram disponibilizados dados específicos sobre "
+                "o número de unidades, colaboradores, frota ou mercados "
+                "atendidos.\n\n"
+            ),
+            (
+                "Enquadramento ESG e normativo\n"
+                "- Pilares ESG: E / S / G\n"
+                "- GRI aplicavel: GRI 2-1 | GRI 2-2 | GRI 2-6\n"
+            ),
+        ],
+    )
+
+    with (
+        patch(
+            "app.services.report_pipeline.retrieve_project_context",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+        patch(
+            "app.services.report_pipeline.retrieve_framework_reference",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+        patch("app.services.report_pipeline.SessionLocal") as mock_session_cls,
+        patch("langchain_openai.ChatOpenAI", return_value=fake_llm),
+    ):
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        mock_session_cls.return_value = mock_session
+
+        result = await run_single_agent(
+            template=template,
+            ctx=ctx,
+            prior_sections_summary="",
+            event_queue=queue,
+        )
+
+    content = result.section_payload["content"]
+    assert "A ausência de dados quantitativos específicos limita" not in content
+    assert "não foram disponibilizados dados específicos sobre" not in content
+    assert "A organizacao (GRI 2-1) foi fundada em 2016" in content
+
+    inline_gap_warnings = [
+        gap for gap in result.gaps if gap["category"] == "inline_gap_warning"
+    ]
+    assert len(inline_gap_warnings) == 2
+    assert all(gap["group"] == "content_gap" for gap in inline_gap_warnings)
+    assert all(gap["severity"] == "warning" for gap in inline_gap_warnings)
+    assert all(gap["priority"] == "medium" for gap in inline_gap_warnings)
+    assert all(
+        gap["missing_data_type"]
+        == "Dado factual ou quantitativo ausente no texto-fonte"
+        for gap in inline_gap_warnings
+    )
+    assert all(
+        gap["suggested_document"]
+        == "Documento institucional, planilha operacional ou evidência primária da pasta da seção"
+        for gap in inline_gap_warnings
+    )
+    assert all(gap.get("related_gri_codes") is None for gap in inline_gap_warnings)
+    assert any(
+        gap["title"] == "Diagnóstico de ausência de dados removido do texto"
+        for gap in inline_gap_warnings
+    )
+    assert all(gap.get("recommendation") for gap in inline_gap_warnings)
 
 
 @pytest.mark.asyncio
@@ -378,6 +468,7 @@ async def test_run_report_pipeline_fatal_sets_failed_status() -> None:
 
     assert mock_report.status == ReportStatus.FAILED
     assert committed["called"]
-    assert any(
-        g.get("category") == "generation_error" for g in (mock_report.gaps or [])
-    )
+    gaps = cast(list[dict[str, object]], mock_report.gaps or [])
+    assert gaps
+    assert gaps[0]["group"] == "generation_issue"
+    assert any(g.get("category") == "generation_error" for g in gaps)

@@ -14,6 +14,8 @@ import {
 } from '../services/api-client'
 import type {
   GriIndexEntry,
+  ReportGap,
+  ReportGapGroup,
   ReportListItem,
   ReportRecord,
   ReportSection,
@@ -77,6 +79,33 @@ function formatDateTime(value: string) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(date)
+}
+
+function getGapGroupLabel(group: ReportGapGroup) {
+  return {
+    vocabulary_warning: 'Avisos do linter de vocabulário',
+    content_gap: 'Lacunas de conteúdo ou evidência',
+    generation_issue: 'Erros de geração',
+  }[group]
+}
+
+function getGapGroup(gap: ReportGap): ReportGapGroup {
+  if (gap.group) {
+    return gap.group
+  }
+
+  if (
+    gap.category === 'forbidden_term' ||
+    gap.category === 'controlled_term_flag'
+  ) {
+    return 'vocabulary_warning'
+  }
+
+  if (gap.category === 'generation_error') {
+    return 'generation_issue'
+  }
+
+  return 'content_gap'
 }
 
 // ---------- GRI index table ----------
@@ -1001,22 +1030,127 @@ export function ProjectGenerationPage() {
                       Nenhuma lacuna registrada nesta versão.
                     </p>
                   ) : (
-                    <ul className="space-y-2">
-                      {activeReport.gaps?.map((gap, index) => (
-                        <li
-                          key={`${gap.section_key}-${index}`}
-                          className="rounded-[0.9rem] border border-black/6 bg-[#fbfbfc] px-3 py-2"
-                        >
-                          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#9b9ba1]">
-                            {gap.category}
-                            {gap.section_key ? ` · ${gap.section_key}` : ''}
-                          </p>
-                          <p className="mt-1 text-[12px] leading-5 tracking-[-0.01em] text-[#3a3a3c]">
-                            {gap.detail}
-                          </p>
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="space-y-4">
+                      {(
+                        [
+                          'content_gap',
+                          'vocabulary_warning',
+                          'generation_issue',
+                        ] as ReportGapGroup[]
+                      )
+                        .map((group) => ({
+                          group,
+                          gaps: (activeReport.gaps ?? []).filter(
+                            (gap) => getGapGroup(gap) === group
+                          ),
+                        }))
+                        .filter(({ gaps }) => gaps.length > 0)
+                        .map(({ group, gaps }) => (
+                          <section key={group} className="space-y-2">
+                            <h4 className="text-[12px] font-medium tracking-[-0.01em] text-[#1d1d1f]">
+                              {getGapGroupLabel(group)}
+                            </h4>
+                            <div className="overflow-x-auto rounded-[0.9rem] border border-black/6 bg-[#fbfbfc]">
+                              <table className="w-full text-[12px] tracking-[-0.01em]">
+                                <thead className="bg-white text-[#6b6b72]">
+                                  <tr>
+                                    <th className="px-3 py-2 text-left font-medium">
+                                      Seção
+                                    </th>
+                                    <th className="px-3 py-2 text-left font-medium">
+                                      Prioridade
+                                    </th>
+                                    <th className="px-3 py-2 text-left font-medium">
+                                      Categoria
+                                    </th>
+                                    <th className="px-3 py-2 text-left font-medium">
+                                      Tipo de dado faltante
+                                    </th>
+                                    <th className="px-3 py-2 text-left font-medium">
+                                      Documento sugerido
+                                    </th>
+                                    <th className="px-3 py-2 text-left font-medium">
+                                      GRI relacionado
+                                    </th>
+                                    <th className="px-3 py-2 text-left font-medium">
+                                      Achado
+                                    </th>
+                                    <th className="px-3 py-2 text-left font-medium">
+                                      Ação recomendada
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {gaps.map((gap, index) => (
+                                    <tr
+                                      key={`${group}-${gap.section_key}-${index}`}
+                                      className="border-t border-black/6 align-top"
+                                    >
+                                      <td className="px-3 py-2 text-[#3a3a3c]">
+                                        {gap.section_key ?? 'Relatório'}
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        {gap.priority ? (
+                                          <span className="rounded-full bg-[#fff6d9] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[#8a6200]">
+                                            {gap.priority === 'high'
+                                              ? 'Alta'
+                                              : gap.priority === 'medium'
+                                                ? 'Média'
+                                                : 'Baixa'}
+                                          </span>
+                                        ) : (
+                                          <span className="text-[#9b9ba1]">
+                                            —
+                                          </span>
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <div className="space-y-1">
+                                          <span className="rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[#6b6b72]">
+                                            {gap.category}
+                                          </span>
+                                          {gap.severity ? (
+                                            <div>
+                                              <span className="rounded-full bg-[#fff6d9] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[#8a6200]">
+                                                {gap.severity}
+                                              </span>
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      </td>
+                                      <td className="px-3 py-2 text-[#3a3a3c]">
+                                        {gap.missing_data_type ?? '—'}
+                                      </td>
+                                      <td className="px-3 py-2 text-[#3a3a3c]">
+                                        {gap.suggested_document ?? '—'}
+                                      </td>
+                                      <td className="px-3 py-2 text-[#3a3a3c]">
+                                        {gap.related_gri_codes &&
+                                        gap.related_gri_codes.length > 0
+                                          ? gap.related_gri_codes.join(', ')
+                                          : '—'}
+                                      </td>
+                                      <td className="px-3 py-2 text-[#3a3a3c]">
+                                        <div className="space-y-1">
+                                          {gap.title ? (
+                                            <p className="font-medium text-[#1d1d1f]">
+                                              {gap.title}
+                                            </p>
+                                          ) : null}
+                                          <p>{gap.detail}</p>
+                                        </div>
+                                      </td>
+                                      <td className="px-3 py-2 text-[#3a3a3c]">
+                                        {gap.recommendation ?? '—'}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </section>
+                        ))}
+                    </div>
                   )}
                 </div>
               )}

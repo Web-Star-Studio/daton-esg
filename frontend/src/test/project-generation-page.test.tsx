@@ -108,8 +108,65 @@ const sampleReport = {
   gaps: [
     {
       section_key: 'gestao-ambiental',
+      group: 'content_gap' as const,
       category: 'sparse_evidence' as const,
+      title: 'Seção abaixo do alvo de conteúdo',
       detail: 'seção abaixo do alvo',
+      recommendation:
+        'Complementar a base documental da seção com fatos e evidências específicos antes de nova geração.',
+      severity: 'warning' as const,
+      priority: 'medium' as const,
+      missing_data_type: 'Evidência organizacional insuficiente',
+      suggested_document:
+        'Documentos adicionais da pasta da seção com dados verificáveis',
+      related_gri_codes: ['GRI 2-1', 'GRI 2-2', 'GRI 2-6'],
+    },
+    {
+      section_key: 'a-empresa',
+      group: 'content_gap' as const,
+      category: 'inline_gap_warning' as const,
+      title: 'Diagnóstico de ausência de dados removido do texto',
+      detail:
+        'A ausência de dados quantitativos específicos limita a profundidade da análise.',
+      recommendation:
+        'Registrar a ausência de dados como lacuna estruturada e complementar a pasta da seção com métricas quantitativas verificáveis.',
+      severity: 'warning' as const,
+      priority: 'medium' as const,
+      missing_data_type: 'Dado factual ou quantitativo ausente no texto-fonte',
+      suggested_document:
+        'Documento institucional, planilha operacional ou evidência primária da pasta da seção',
+      related_gri_codes: ['GRI 2-1', 'GRI 2-2', 'GRI 2-6'],
+    },
+    {
+      section_key: 'a-empresa',
+      group: 'vocabulary_warning' as const,
+      category: 'controlled_term_flag' as const,
+      title: 'Termo controlado sem dado de suporte',
+      detail:
+        "termo controlado 'compromisso' sem dados proximos: …compromisso com a sustentabilidade…",
+      recommendation:
+        'Validar se o termo controlado está sustentado por dado verificável próximo ou reescrever o trecho.',
+      severity: 'info' as const,
+      priority: 'low' as const,
+      missing_data_type: 'Dado quantitativo de suporte',
+      suggested_document:
+        'Planilha, relatório técnico ou documento com número, unidade e período de referência',
+      related_gri_codes: ['GRI 2-1', 'GRI 2-2', 'GRI 2-6'],
+    },
+    {
+      section_key: 'a-empresa',
+      group: 'generation_issue' as const,
+      category: 'generation_error' as const,
+      title: 'Erro de geração',
+      detail: 'timeout na geração da seção',
+      recommendation:
+        'Reexecutar a geração da seção após verificar contexto, configuração e disponibilidade do modelo.',
+      severity: 'critical' as const,
+      priority: 'high' as const,
+      missing_data_type: 'Saída gerada pela etapa de IA',
+      suggested_document:
+        'Não se aplica — revisar contexto e reexecutar a geração',
+      related_gri_codes: ['GRI 2-1', 'GRI 2-2', 'GRI 2-6'],
     },
   ],
   indicators: null,
@@ -347,6 +404,92 @@ describe('ProjectGenerationPage', () => {
       expect(screen.getByText('GRI 2')).toBeInTheDocument()
       // the code appears in the table body
       expect(screen.getAllByText('GRI 2-1').length).toBeGreaterThan(0)
+    })
+  })
+
+  it('groups lacunas by type in the gaps tab', async () => {
+    mockFetchProject.mockResolvedValue(baseProject)
+    mockFetchProjects.mockResolvedValue([baseProject])
+    mockFetchReports.mockResolvedValue([
+      {
+        id: 'report-1',
+        project_id: 'project-1',
+        version: 1,
+        status: 'draft',
+        created_at: '2026-04-06T00:00:00Z',
+        updated_at: '2026-04-06T00:00:00Z',
+      },
+    ])
+    mockFetchReport.mockResolvedValue(sampleReport)
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('Versão 1')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /lacunas \(/i }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/lacunas de conteúdo ou evidência/i)
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText(/avisos do linter de vocabulário/i)
+      ).toBeInTheDocument()
+      expect(screen.getByText(/erros de geração/i)).toBeInTheDocument()
+
+      expect(screen.getAllByText('Seção').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('Prioridade').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('Categoria').length).toBeGreaterThan(0)
+      expect(
+        screen.getAllByText('Tipo de dado faltante').length
+      ).toBeGreaterThan(0)
+      expect(screen.getAllByText('Documento sugerido').length).toBeGreaterThan(
+        0
+      )
+      expect(screen.getAllByText('GRI relacionado').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('Achado').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('Ação recomendada').length).toBeGreaterThan(0)
+
+      expect(screen.getAllByText('Média').length).toBeGreaterThan(0)
+      expect(
+        screen.getByText(/evidência organizacional insuficiente/i)
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText(/dado factual ou quantitativo ausente no texto-fonte/i)
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          /documentos adicionais da pasta da seção com dados verificáveis/i
+        )
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          /documento institucional, planilha operacional ou evidência primária da pasta da seção/i
+        )
+      ).toBeInTheDocument()
+      expect(
+        screen.getAllByText(/GRI 2-1, GRI 2-2, GRI 2-6/i).length
+      ).toBeGreaterThan(0)
+
+      expect(
+        screen.getByText(/seção abaixo do alvo de conteúdo/i)
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText(/diagnóstico de ausência de dados removido do texto/i)
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          /registrar a ausência de dados como lacuna estruturada/i
+        )
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText(/termo controlado 'compromisso'/i)
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText(/timeout na geração da seção/i)
+      ).toBeInTheDocument()
     })
   })
 })

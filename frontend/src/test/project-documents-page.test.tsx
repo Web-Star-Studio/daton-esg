@@ -151,11 +151,11 @@ describe('ProjectDocumentsPage', () => {
 
     expect(
       await screen.findByRole('link', {
-        name: /1\. visão estratégica de sustentabilidade/i,
+        name: /1\. a empresa \(sumário executivo\)/i,
       })
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('link', { name: /3\. gestão ambiental/i })
+      screen.getByRole('link', { name: /4\. gestão ambiental/i })
     ).toBeInTheDocument()
     expect(
       screen.queryByRole('button', {

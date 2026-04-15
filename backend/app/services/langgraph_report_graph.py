@@ -38,6 +38,198 @@ from app.services.vocabulary_linter import lint as lint_vocabulary
 
 logger = logging.getLogger(__name__)
 
+_INLINE_GAP_PATTERNS: tuple[tuple[re.Pattern[str], str, str], ...] = (
+    (
+        re.compile(r"(?i)\ba ausência de dados quantitativos específicos limita\b"),
+        "Diagnóstico de ausência de dados removido do texto",
+        "Registrar a ausência de dados como lacuna estruturada e complementar a pasta da seção com métricas quantitativas verificáveis.",
+    ),
+    (
+        re.compile(r"(?i)\bn[oã]o foram disponibilizados dados específicos sobre\b"),
+        "Diagnóstico de dados não disponibilizados removido do texto",
+        "Indicar essa falta na página de lacunas e solicitar evidências objetivas sobre unidades, colaboradores, frota, mercados ou demais elementos citados.",
+    ),
+    (
+        re.compile(r"(?i)\ba ausência de indicadores quantitativos impede\b"),
+        "Diagnóstico de ausência de indicadores removido do texto",
+        "Mover a recomendação para a página de lacunas e orientar a coleta de indicadores compatíveis com os GRI aplicáveis à seção.",
+    ),
+    (
+        re.compile(r"(?i)\brecomenda-se a implementa[cç][aã]o futura de indicadores\b"),
+        "Recomendação operacional removida do corpo da seção",
+        "Apresentar recomendações de estruturação de indicadores na página de lacunas, sem mantê-las no conteúdo final da seção.",
+    ),
+    (
+        re.compile(r"(?i)\ba ausência atual de dados específicos limita\b"),
+        "Diagnóstico de limitação analítica removido do texto",
+        "Converter a limitação em lacuna acionável e orientar a complementação documental antes da próxima regeneração.",
+    ),
+)
+
+_SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[\.\!\?])\s+")
+
+
+def _gap_group_for_category(category: str) -> str:
+    if category in {"forbidden_term", "controlled_term_flag"}:
+        return "vocabulary_warning"
+    if category == "generation_error":
+        return "generation_issue"
+    return "content_gap"
+
+
+def _default_gap_title(category: str) -> str | None:
+    return {
+        "forbidden_term": "Termo proibido removido",
+        "controlled_term_flag": "Termo controlado sem dado de suporte",
+        "sparse_evidence": "Seção com evidência insuficiente",
+        "missing_enquadramento": "Bloco obrigatório ausente",
+        "missing_gri_code": "Código GRI inválido removido",
+        "generation_error": "Erro de geração",
+        "inline_gap_warning": "Diagnóstico inline removido do texto",
+    }.get(category)
+
+
+def _default_gap_recommendation(category: str) -> str | None:
+    return {
+        "forbidden_term": "Revisar o texto para manter somente linguagem técnica e aderente ao vocabulário permitido.",
+        "controlled_term_flag": "Validar se o termo controlado está sustentado por dado verificável próximo ou reescrever o trecho.",
+        "sparse_evidence": "Complementar a base documental da seção com evidências mais específicas antes de nova regeneração.",
+        "missing_enquadramento": "Regenerar a seção incluindo o bloco final 'Enquadramento ESG e normativo'.",
+        "missing_gri_code": "Revisar o enquadramento GRI utilizado e manter apenas códigos válidos para a seção.",
+        "generation_error": "Reexecutar a geração da seção após verificar contexto, configuração e disponibilidade do modelo.",
+        "inline_gap_warning": "Apresentar esse diagnóstico na página de lacunas, não no corpo da seção final.",
+    }.get(category)
+
+
+def _default_gap_severity(category: str) -> str:
+    if category == "generation_error":
+        return "critical"
+    if category in {"missing_enquadramento", "missing_gri_code", "sparse_evidence"}:
+        return "warning"
+    return "info"
+
+
+def _default_gap_priority(category: str) -> str:
+    if category == "generation_error":
+        return "high"
+    if category in {
+        "missing_enquadramento",
+        "missing_gri_code",
+        "sparse_evidence",
+        "inline_gap_warning",
+    }:
+        return "medium"
+    return "low"
+
+
+def _default_missing_data_type(category: str) -> str | None:
+    return {
+        "sparse_evidence": "Evidência organizacional insuficiente",
+        "missing_enquadramento": "Bloco estrutural obrigatório",
+        "missing_gri_code": "Enquadramento GRI válido",
+        "controlled_term_flag": "Dado quantitativo de suporte",
+        "inline_gap_warning": "Dado factual ou quantitativo ausente no texto-fonte",
+        "generation_error": "Saída gerada pela etapa de IA",
+    }.get(category)
+
+
+def _default_suggested_document(section_key: str | None, category: str) -> str | None:
+    if category == "inline_gap_warning":
+        return "Documento institucional, planilha operacional ou evidência primária da pasta da seção"
+    if category == "sparse_evidence":
+        return "Documentos adicionais da pasta da seção com dados verificáveis"
+    if category == "controlled_term_flag":
+        return "Planilha, relatório técnico ou documento com número, unidade e período de referência"
+    if category == "missing_gri_code":
+        return "Matriz de mapeamento GRI ou evidência primária revisada"
+    if category == "missing_enquadramento":
+        return "Não se aplica — ajustar a estrutura do texto gerado"
+    if category == "generation_error":
+        return "Não se aplica — revisar contexto e reexecutar a geração"
+    return "Documento adicional alinhado à pasta da seção" if section_key else None
+
+
+def _build_gap(
+    *,
+    section_key: str | None,
+    category: str,
+    detail: str,
+    title: str | None = None,
+    recommendation: str | None = None,
+    severity: str | None = None,
+    priority: str | None = None,
+    missing_data_type: str | None = None,
+    suggested_document: str | None = None,
+    related_gri_codes: list[str] | None = None,
+) -> dict[str, Any]:
+    return {
+        "section_key": section_key,
+        "group": _gap_group_for_category(category),
+        "category": category,
+        "detail": detail,
+        "title": title or _default_gap_title(category),
+        "recommendation": recommendation or _default_gap_recommendation(category),
+        "severity": severity or _default_gap_severity(category),
+        "priority": priority or _default_gap_priority(category),
+        "missing_data_type": missing_data_type or _default_missing_data_type(category),
+        "suggested_document": suggested_document
+        or _default_suggested_document(section_key, category),
+        "related_gri_codes": related_gri_codes,
+    }
+
+
+def _strip_inline_gap_diagnostics(
+    content: str,
+    *,
+    section_key: str,
+) -> tuple[str, list[dict[str, Any]]]:
+    paragraphs = content.split("\n\n")
+    cleaned_paragraphs: list[str] = []
+    new_gaps: list[dict[str, Any]] = []
+
+    for paragraph in paragraphs:
+        if not paragraph.strip():
+            continue
+        if paragraph.lstrip().startswith("Enquadramento ESG e normativo"):
+            cleaned_paragraphs.append(paragraph)
+            continue
+
+        parts = _SENTENCE_SPLIT_PATTERN.split(paragraph.strip())
+        kept_parts: list[str] = []
+
+        for part in parts:
+            stripped_part = part.strip()
+            if not stripped_part:
+                continue
+
+            matched = False
+            for pattern, title, recommendation in _INLINE_GAP_PATTERNS:
+                if pattern.search(stripped_part):
+                    new_gaps.append(
+                        _build_gap(
+                            section_key=section_key,
+                            category="inline_gap_warning",
+                            detail=stripped_part,
+                            title=title,
+                            recommendation=recommendation,
+                            severity="warning",
+                            missing_data_type="Dado factual ou quantitativo ausente no texto-fonte",
+                            suggested_document="Documento institucional, planilha operacional ou evidência primária da pasta da seção",
+                        )
+                    )
+                    matched = True
+                    break
+
+            if not matched:
+                kept_parts.append(stripped_part)
+
+        if kept_parts:
+            cleaned_paragraphs.append(" ".join(kept_parts))
+
+    cleaned_content = "\n\n".join(cleaned_paragraphs)
+    return cleaned_content, new_gaps
+
+
 _INLINE_GRI_PATTERN = re.compile(r"\(GRI\s+\d{1,3}-\d+[a-z]?\)", re.IGNORECASE)
 _GRI_CODE_EXTRACT_PATTERN = re.compile(r"GRI\s+(\d{1,3})-(\d+[a-z]?)", re.IGNORECASE)
 _ENQUADRAMENTO_HEADER_PATTERN = re.compile(
@@ -130,7 +322,8 @@ def _format_project_chunks(chunks: list[RetrievedKnowledgeChunk]) -> str:
     if not chunks:
         return (
             "Nenhuma evidência recuperada da organização para esta seção. "
-            "Declare a limitação explicitamente no texto."
+            "Use somente fatos verificáveis disponíveis no contexto; não inclua "
+            "avisos de processo, mensagens de erro ou diagnósticos no corpo da seção."
         )
     blocks: list[str] = []
     for idx, chunk in enumerate(chunks, 1):
@@ -257,9 +450,12 @@ def _build_user_prompt(state: ReportGraphState) -> str:
         "onde X-Y deve ser um dos códigos listados acima. Finalize a seção com um "
         'bloco destacado "Enquadramento ESG e normativo" seguido das quatro linhas '
         "(Pilares ESG, GRI aplicável, Referências técnicas, ODS relacionados).\n\n"
-        "Quando a base de evidências da organização for fraca ou ausente, declare "
-        "a limitação explicitamente no próprio texto; não preencha com conteúdo "
-        "genérico ou especulativo."
+        "Quando a base de evidências da organização for fraca ou ausente, não "
+        "insira avisos de processo, mensagens de erro, pedidos de dados ou "
+        "diagnósticos no corpo da seção. Redija apenas o que puder ser sustentado "
+        "pelas evidências recuperadas e deixe que eventuais lacunas sejam tratadas "
+        "separadamente pelo sistema. Não preencha com conteúdo genérico ou "
+        "especulativo."
     )
 
     return f"{context_block}\n\n{task}"
@@ -515,11 +711,12 @@ async def validate_and_persist(state: ReportGraphState) -> dict[str, Any]:
     prior_summary = state.get("prior_sections_summary", "")
 
     if state.get("_generation_error"):
-        gap = {
-            "section_key": template.key,
-            "category": "generation_error",
-            "detail": str(state["_generation_error"]),
-        }
+        gap = _build_gap(
+            section_key=template.key,
+            category="generation_error",
+            detail=str(state["_generation_error"]),
+            related_gri_codes=list(template.gri_codes),
+        )
         new_gaps.append(gap)
         failed_section = state.get("draft_section") or {
             "key": template.key,
@@ -550,44 +747,54 @@ async def validate_and_persist(state: ReportGraphState) -> dict[str, Any]:
     )
     for bad in invalid_codes:
         new_gaps.append(
-            {
-                "section_key": template.key,
-                "category": "missing_gri_code",
-                "detail": f"código GRI inválido removido: {bad}",
-            }
+            _build_gap(
+                section_key=template.key,
+                category="missing_gri_code",
+                detail=f"código GRI inválido removido: {bad}",
+                related_gri_codes=list(template.gri_codes),
+            )
         )
+
+    cleaned_content, inline_gap_warnings = _strip_inline_gap_diagnostics(
+        cleaned_content,
+        section_key=template.key,
+    )
+    new_gaps.extend(inline_gap_warnings)
 
     # vocabulary linter
     lint_result = lint_vocabulary(cleaned_content)
     cleaned_content = lint_result.cleaned_content
     for removal in lint_result.removals:
         new_gaps.append(
-            {
-                "section_key": template.key,
-                "category": "forbidden_term",
-                "detail": f"termo proibido removido: {removal.term}",
-            }
+            _build_gap(
+                section_key=template.key,
+                category="forbidden_term",
+                detail=f"termo proibido removido: {removal.term}",
+                related_gri_codes=list(template.gri_codes),
+            )
         )
     for warning in lint_result.warnings:
         new_gaps.append(
-            {
-                "section_key": template.key,
-                "category": "controlled_term_flag",
-                "detail": (
+            _build_gap(
+                section_key=template.key,
+                category="controlled_term_flag",
+                detail=(
                     f"termo controlado '{warning.term}' usado sem dados "
                     f"próximos — revisar contexto: {warning.excerpt}"
                 ),
-            }
+                related_gri_codes=list(template.gri_codes),
+            )
         )
 
     # Enquadramento structural check (Formato Dinâmico)
     if not _has_enquadramento_block(cleaned_content):
         new_gaps.append(
-            {
-                "section_key": template.key,
-                "category": "missing_enquadramento",
-                "detail": "bloco 'Enquadramento ESG e normativo' ausente ao final da seção",
-            }
+            _build_gap(
+                section_key=template.key,
+                category="missing_enquadramento",
+                detail="bloco 'Enquadramento ESG e normativo' ausente ao final da seção",
+                related_gri_codes=list(template.gri_codes),
+            )
         )
 
     # length guard
@@ -601,14 +808,18 @@ async def validate_and_persist(state: ReportGraphState) -> dict[str, Any]:
     if word_count < min_target:
         status = "sparse_data"
         new_gaps.append(
-            {
-                "section_key": template.key,
-                "category": "sparse_evidence",
-                "detail": (
+            _build_gap(
+                section_key=template.key,
+                category="sparse_evidence",
+                detail=(
                     f"seção abaixo do alvo: {word_count} palavras vs alvo {target}. "
                     "Evidências da organização possivelmente insuficientes."
                 ),
-            }
+                title="Seção abaixo do alvo de conteúdo",
+                recommendation="Complementar a base documental da seção com fatos e evidências específicos antes de nova geração.",
+                severity="warning",
+                related_gri_codes=list(template.gri_codes),
+            )
         )
     elif word_count > max_target:
         # truncate at the last complete paragraph before the word limit

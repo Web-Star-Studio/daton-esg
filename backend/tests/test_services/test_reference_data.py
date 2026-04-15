@@ -20,6 +20,7 @@ MIGRATION_PATH = (
 )
 
 DOCUMENT_DIRECTORY_KEYS = {
+    "a-empresa-sumario-executivo",
     "visao-estrategica-de-sustentabilidade",
     "governanca-corporativa",
     "gestao-ambiental",
@@ -76,7 +77,7 @@ def test_ods_metas_count_and_link(migration_module) -> None:
 
 
 def test_captacao_rows_count(migration_module) -> None:
-    assert len(migration_module.CAPTACAO_ROWS) == 28
+    assert len(migration_module.CAPTACAO_ROWS) == 32
 
 
 def test_captacao_sessions_use_document_directory_keys(migration_module) -> None:

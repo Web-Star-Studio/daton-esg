@@ -1429,6 +1429,38 @@ ODS_METAS = [
 
 CAPTACAO_ROWS = [
     {
+        "sessao": "a-empresa-sumario-executivo",
+        "tipo_dado": "Dados cadastrais e detalhes organizacionais",
+        "gri_code": "GRI 2-1",
+        "descricao": "Razão social, nome fantasia, natureza jurídica, ano de fundação, CNPJ e localização da sede",
+        "fonte_documental": "Contrato social, cartão CNPJ, apresentação institucional",
+        "tipo_evidencia": "Documento oficial, texto institucional",
+    },
+    {
+        "sessao": "a-empresa-sumario-executivo",
+        "tipo_dado": "Entidades incluídas no relato e escopo organizacional",
+        "gri_code": "GRI 2-2",
+        "descricao": "Empresas controladas, unidades operacionais, filiais ou operações contempladas na seção e no relatório",
+        "fonte_documental": "Estrutura societária, organograma societário, memorial descritivo",
+        "tipo_evidencia": "Tabela, organograma, texto institucional",
+    },
+    {
+        "sessao": "a-empresa-sumario-executivo",
+        "tipo_dado": "Principais atividades, produtos, serviços e mercados atendidos",
+        "gri_code": "GRI 2-1",
+        "descricao": "Descrição objetiva da atuação da organização, portfólio principal e abrangência geográfica/comercial",
+        "fonte_documental": "Apresentação institucional, site corporativo, portfólio comercial",
+        "tipo_evidencia": "Texto institucional, tabela, brochura",
+    },
+    {
+        "sessao": "a-empresa-sumario-executivo",
+        "tipo_dado": "Cadeia de valor e relacionamento com fornecedores e clientes",
+        "gri_code": "GRI 2-6",
+        "descricao": "Elementos da cadeia de valor, insumos principais, públicos atendidos e elos operacionais relevantes",
+        "fonte_documental": "Mapa da cadeia de valor, apresentação institucional, políticas comerciais",
+        "tipo_evidencia": "Fluxograma, texto institucional, tabela",
+    },
+    {
         "sessao": "visao-estrategica-de-sustentabilidade",
         "tipo_dado": "Declaração de missão, visão e valores",
         "gri_code": "GRI 2-22",

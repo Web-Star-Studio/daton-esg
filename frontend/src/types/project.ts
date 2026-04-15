@@ -120,6 +120,11 @@ export type GriIndexEntry = {
   found_in_text: boolean
 }
 
+export type ReportGapGroup =
+  | 'vocabulary_warning'
+  | 'content_gap'
+  | 'generation_issue'
+
 export type ReportGapCategory =
   | 'forbidden_term'
   | 'sparse_evidence'
@@ -127,11 +132,23 @@ export type ReportGapCategory =
   | 'missing_gri_code'
   | 'controlled_term_flag'
   | 'generation_error'
+  | 'inline_gap_warning'
+
+export type ReportGapSeverity = 'info' | 'warning' | 'critical'
+export type ReportGapPriority = 'low' | 'medium' | 'high'
 
 export type ReportGap = {
   section_key: string | null
+  group?: ReportGapGroup | null
   category: ReportGapCategory
   detail: string
+  title?: string | null
+  recommendation?: string | null
+  severity?: ReportGapSeverity | null
+  priority?: ReportGapPriority | null
+  missing_data_type?: string | null
+  suggested_document?: string | null
+  related_gri_codes?: string[] | null
 }
 
 export type ReportListItem = {

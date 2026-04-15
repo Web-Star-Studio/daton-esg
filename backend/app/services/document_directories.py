@@ -14,54 +14,59 @@ class DocumentDirectory:
 
 DOCUMENT_DIRECTORIES: tuple[DocumentDirectory, ...] = (
     DocumentDirectory(
-        key="visao-estrategica-de-sustentabilidade",
-        label="1. Visão Estratégica de Sustentabilidade",
+        key="a-empresa-sumario-executivo",
+        label="1. A Empresa (Sumário Executivo)",
         order=1,
     ),
     DocumentDirectory(
-        key="governanca-corporativa",
-        label="2. Governança Corporativa",
+        key="visao-estrategica-de-sustentabilidade",
+        label="2. Visão Estratégica de Sustentabilidade",
         order=2,
     ),
     DocumentDirectory(
-        key="gestao-ambiental",
-        label="3. Gestão Ambiental",
+        key="governanca-corporativa",
+        label="3. Governança Corporativa",
         order=3,
     ),
     DocumentDirectory(
-        key="desempenho-social",
-        label="4. Desempenho Social",
+        key="gestao-ambiental",
+        label="4. Gestão Ambiental",
         order=4,
     ),
     DocumentDirectory(
-        key="gestao-de-desempenho-economico",
-        label="5. Gestão de Desempenho Econômico",
+        key="desempenho-social",
+        label="5. Desempenho Social",
         order=5,
     ),
     DocumentDirectory(
-        key="relacionamento-com-stakeholders",
-        label="6. Relacionamento com Stakeholders",
+        key="gestao-de-desempenho-economico",
+        label="6. Gestão de Desempenho Econômico",
         order=6,
     ),
     DocumentDirectory(
-        key="inovacao-e-desenvolvimento-tecnologico",
-        label="7. Inovação e Desenvolvimento Tecnológico",
+        key="relacionamento-com-stakeholders",
+        label="7. Relacionamento com Stakeholders",
         order=7,
     ),
     DocumentDirectory(
-        key="relatorios-e-normas",
-        label="8. Relatórios e Normas",
+        key="inovacao-e-desenvolvimento-tecnologico",
+        label="8. Inovação e Desenvolvimento Tecnológico",
         order=8,
     ),
     DocumentDirectory(
-        key="comunicacao-e-transparencia",
-        label="9. Comunicação e Transparência",
+        key="relatorios-e-normas",
+        label="9. Relatórios e Normas",
         order=9,
     ),
     DocumentDirectory(
-        key="auditorias-e-avaliacoes",
-        label="10. Auditorias e Avaliações",
+        key="comunicacao-e-transparencia",
+        label="10. Comunicação e Transparência",
         order=10,
+    ),
+    DocumentDirectory(
+        key="auditorias-e-avaliacoes",
+        label="11. Auditorias e Avaliações",
+        order=11,
     ),
 )
 

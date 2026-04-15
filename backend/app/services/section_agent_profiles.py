@@ -48,27 +48,33 @@ SECTION_AGENT_PROFILES: dict[str, SectionAgentProfile] = {
         section_key="a-empresa",
         agent_name="Agente de Perfil Organizacional",
         role_description=(
-            "Especialista em descrever o perfil institucional da organizacao: "
-            "historia, natureza juridica, atividades, produtos, servicos, "
-            "abrangencia geografica e estrutura de pessoal."
+            "Especialista em redigir um sumario executivo institucional da "
+            "organizacao, cobrindo identidade corporativa, natureza juridica, "
+            "principais atividades, produtos, servicos, abrangencia geografica, "
+            "escopo organizacional e cadeia de valor."
         ),
         domain_addendum=(
             "Foque nos GRI 2-1 (detalhes organizacionais), GRI 2-2 (entidades "
-            "incluidas) e GRI 2-6 (cadeia de valor). Apresente fatos objetivos "
-            "sobre a organizacao: ano de fundacao, CNPJ se disponivel, setor de "
-            "atuacao, porte (numero de colaboradores, unidades), mercados atendidos. "
-            "Nao avance sobre estrategia ou governanca — essas serao cobertas por "
-            "outros agentes."
+            "incluidas) e GRI 2-6 (cadeia de valor). Estruture a secao como uma "
+            "visao geral executiva da organizacao, com fatos objetivos sobre "
+            "identidade institucional, ano de fundacao, CNPJ se disponivel, sede, "
+            "setor de atuacao, porte operacional, unidades, mercados atendidos, "
+            "entidades contempladas no relato e elementos centrais da cadeia de "
+            "valor. Nao avance sobre estrategia, metas ESG ou governanca detalhada "
+            "— essas dimensoes serao cobertas por outros agentes."
         ),
         output_structure_hint=(
-            "Prosa continua institucional. Evite listas longas; integre "
-            "informacoes factuais no texto. Se houver dados sobre frota, "
-            "unidades ou abrangencia, quantifique inline."
+            "Prosa continua institucional, em tom de abertura de relatorio. "
+            "Priorize 2 a 4 paragrafos coesos, com visao geral objetiva e bem "
+            "encadeada. Evite listas longas; integre informacoes factuais no texto. "
+            "Se houver dados sobre unidades, pessoas, frota, mercados ou abrangencia, "
+            "quantifique inline."
         ),
         style_nuance=(
-            "Factual e descritivo. Primeira secao do relatorio — estabeleca o "
-            "tom institucional sem ser promocional. Verbos: constituir, atuar, "
-            "abranger, operar."
+            "Sintetico, factual e descritivo. Primeira secao do relatorio — "
+            "estabeleca o contexto institucional sem tom promocional. Privilegie "
+            "clareza executiva, densidade informacional e verbos como constituir, "
+            "atuar, operar, abranger e atender."
         ),
     ),
     "visao-estrategia": SectionAgentProfile(

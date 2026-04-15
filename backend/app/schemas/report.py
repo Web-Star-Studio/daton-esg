@@ -35,6 +35,14 @@ class GriIndexEntry(BaseModel):
 
 class ReportGapEntry(BaseModel):
     section_key: str | None = None
+    group: (
+        Literal[
+            "vocabulary_warning",
+            "content_gap",
+            "generation_issue",
+        ]
+        | None
+    ) = None
     category: Literal[
         "forbidden_term",
         "sparse_evidence",
@@ -42,8 +50,16 @@ class ReportGapEntry(BaseModel):
         "missing_gri_code",
         "controlled_term_flag",
         "generation_error",
+        "inline_gap_warning",
     ]
     detail: str
+    title: str | None = None
+    recommendation: str | None = None
+    severity: Literal["info", "warning", "critical"] | None = None
+    priority: Literal["low", "medium", "high"] | None = None
+    missing_data_type: str | None = None
+    suggested_document: str | None = None
+    related_gri_codes: list[str] | None = None
 
 
 class ReportListItem(BaseModel):
