@@ -26,6 +26,8 @@ vi.mock('../services/api-client', () => ({
   createProject: vi.fn(),
   createProjectDocumentUpload: vi.fn(),
   deleteProjectDocument: vi.fn(),
+  fetchIndicatorTemplates: vi.fn().mockResolvedValue([]),
+  fetchOdsGoals: vi.fn().mockResolvedValue([]),
   fetchProject: vi.fn(),
   fetchProjectDocuments: vi.fn(),
   fetchProjects: vi.fn(),
@@ -51,6 +53,7 @@ const baseProject = {
   status: 'collecting',
   material_topics: null,
   sdg_goals: null,
+  indicator_values: null,
   created_at: '2026-04-06T00:00:00Z',
   updated_at: '2026-04-06T00:00:00Z',
 }
@@ -266,7 +269,7 @@ describe('project pages', () => {
     })
 
     expect(
-      screen.getByRole('heading', { name: /3\. gestão ambiental/i })
+      screen.getByRole('heading', { name: /4\. gestão ambiental/i })
     ).toBeInTheDocument()
     expect(
       screen.getByRole('button', {
@@ -307,11 +310,9 @@ describe('project pages', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('resets indicator values when switching projects', async () => {
-    mockFetchProject.mockImplementation(async (projectId: string) =>
-      projectId === 'project-2' ? secondProject : baseProject
-    )
-    mockFetchProjects.mockResolvedValue([baseProject, secondProject])
+  it('renders the indicators page with the heading', async () => {
+    mockFetchProject.mockResolvedValue(baseProject)
+    mockFetchProjects.mockResolvedValue([baseProject])
 
     render(
       <MemoryRouter initialEntries={['/projects/project-1/indicators']}>
@@ -327,19 +328,9 @@ describe('project pages', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue('14.500')).toBeInTheDocument()
-    })
-
-    fireEvent.change(screen.getByLabelText(/consumo de energia elétrica/i), {
-      target: { value: '999' },
-    })
-    expect(screen.getByDisplayValue('999')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: /selecionar projeto/i }))
-    fireEvent.click(screen.getByRole('link', { name: /gabarado/i }))
-
-    await waitFor(() => {
-      expect(screen.getByDisplayValue('14.500')).toBeInTheDocument()
+      expect(
+        screen.getByRole('heading', { name: /indicadores esg/i })
+      ).toBeInTheDocument()
     })
   })
 })

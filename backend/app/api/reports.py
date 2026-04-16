@@ -20,6 +20,7 @@ from app.services.project_service import get_project_for_user
 from app.services.report_service import (
     ReportConflictError,
     create_report,
+    delete_report,
     export_report_docx,
     get_report_detail,
     list_reports,
@@ -56,6 +57,24 @@ async def get_report(
     if report is None:
         raise HTTPException(status_code=404, detail="Relatório não encontrado.")
     return ReportResponse.model_validate(report)
+
+
+@router.delete("/{report_id}", status_code=204)
+async def delete_report_endpoint(
+    project_id: UUID,
+    report_id: UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    project = await get_project_for_user(session, project_id, current_user.id)
+    try:
+        await delete_report(session, project_id=project.id, report_id=report_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ReportConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+        ) from exc
 
 
 @router.post("/generate")

@@ -5,6 +5,7 @@ import {
   useProjectWorkspace,
 } from '../hooks/use-project-workspace'
 import {
+  deleteReport,
   exportReportDocx,
   fetchReport,
   fetchReports,
@@ -474,6 +475,9 @@ export function ProjectGenerationPage() {
     () => new Set(ALL_SECTION_KEYS.map((s) => s.key))
   )
   const [showSectionPicker, setShowSectionPicker] = useState(false)
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(
+    null
+  )
   const sectionPickerRef = useRef<HTMLDivElement>(null)
   const editorHandleRef = useRef<SectionEditorHandle | null>(null)
 
@@ -556,6 +560,23 @@ export function ProjectGenerationPage() {
       )
     } finally {
       setIsLoadingActive(false)
+    }
+  }
+
+  async function handleDeleteReport(reportId: string) {
+    if (!currentProjectId) return
+    try {
+      await deleteReport(currentProjectId, reportId)
+      setConfirmingDeleteId(null)
+      if (activeReport?.id === reportId) {
+        setActiveReport(null)
+        setSelectedSectionKey(null)
+      }
+      await loadReports(activeReport?.id === reportId)
+    } catch (error) {
+      setPageError(
+        error instanceof Error ? error.message : 'Falha ao excluir o relatório.'
+      )
     }
   }
 
@@ -893,33 +914,87 @@ export function ProjectGenerationPage() {
             <ul className="space-y-0.5">
               {reports.map((report) => {
                 const isActive = report.id === activeReport?.id
+                const isConfirming = confirmingDeleteId === report.id
+                const canDelete = report.status !== 'generating'
                 return (
-                  <li key={report.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void handleSelectReport(report.id)
-                      }}
-                      className={`apple-focus-ring flex w-full flex-col rounded-md px-2 py-1.5 text-left transition ${
-                        isActive ? 'bg-black/5' : 'hover:bg-black/[0.03]'
-                      }`}
-                    >
-                      <span className="flex items-center justify-between gap-2">
-                        <span className="text-[13px] font-medium tracking-[-0.01em] text-[#1d1d1f]">
-                          Versão {report.version}
+                  <li key={report.id} className="group relative">
+                    {isConfirming ? (
+                      <div className="flex items-center justify-between rounded-md bg-red-50 px-2 py-1.5">
+                        <span className="text-[11px] tracking-[-0.01em] text-red-700">
+                          Excluir versão {report.version}?
                         </span>
-                        <span
-                          className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] ${
-                            STATUS_COLORS[report.status]
+                        <span className="flex gap-1">
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteReport(report.id)}
+                            className="apple-focus-ring rounded px-1.5 py-0.5 text-[11px] font-medium text-red-700 hover:bg-red-100"
+                          >
+                            Sim
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmingDeleteId(null)}
+                            className="apple-focus-ring rounded px-1.5 py-0.5 text-[11px] font-medium text-[#6b6b72] hover:bg-black/5"
+                          >
+                            Não
+                          </button>
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-start">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleSelectReport(report.id)
+                          }}
+                          className={`apple-focus-ring flex min-w-0 flex-1 flex-col rounded-md px-2 py-1.5 text-left transition ${
+                            isActive ? 'bg-black/5' : 'hover:bg-black/[0.03]'
                           }`}
                         >
-                          {STATUS_LABELS[report.status]}
-                        </span>
-                      </span>
-                      <span className="mt-0.5 text-[10px] tracking-[-0.01em] text-[#9b9ba1]">
-                        {formatDateTime(report.created_at)}
-                      </span>
-                    </button>
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="text-[13px] font-medium tracking-[-0.01em] text-[#1d1d1f]">
+                              Versão {report.version}
+                            </span>
+                            <span
+                              className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] ${
+                                STATUS_COLORS[report.status]
+                              }`}
+                            >
+                              {STATUS_LABELS[report.status]}
+                            </span>
+                          </span>
+                          <span className="mt-0.5 text-[10px] tracking-[-0.01em] text-[#9b9ba1]">
+                            {formatDateTime(report.created_at)}
+                          </span>
+                        </button>
+                        {canDelete && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setConfirmingDeleteId(report.id)
+                            }}
+                            className="apple-focus-ring mt-1.5 rounded p-1 text-[#9b9ba1] opacity-0 transition hover:bg-black/5 hover:text-red-600 group-hover:opacity-100"
+                            aria-label={`Excluir versão ${report.version}`}
+                          >
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M3 6h18" />
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </li>
                 )
               })}

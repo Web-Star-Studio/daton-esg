@@ -92,6 +92,23 @@ async def get_report_detail(
     return result.scalar_one_or_none()
 
 
+async def delete_report(
+    session: AsyncSession, *, project_id: UUID, report_id: UUID
+) -> None:
+    """Delete a report. Cannot delete a report that is currently GENERATING."""
+    report = await get_report_detail(
+        session, project_id=project_id, report_id=report_id
+    )
+    if report is None:
+        raise LookupError("Relatório não encontrado.")
+    if report.status == ReportStatus.GENERATING:
+        raise ReportConflictError(
+            "Relatório em geração — aguarde a conclusão para excluir."
+        )
+    await session.delete(report)
+    await session.commit()
+
+
 async def _has_generating_report(session: AsyncSession, *, project_id: UUID) -> bool:
     result = await session.execute(
         select(func.count(Report.id))

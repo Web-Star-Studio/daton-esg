@@ -6,8 +6,6 @@ import {
   signOut,
   type AuthSession,
 } from 'aws-amplify/auth'
-import { cognitoUserPoolsTokenProvider } from 'aws-amplify/auth/cognito'
-import { sharedInMemoryStorage } from 'aws-amplify/utils'
 import type { AuthSignInResult, AuthTokens } from '../types/auth'
 
 type CognitoFrontendConfig = {
@@ -50,8 +48,6 @@ export function configureAmplifyAuth() {
     return
   }
 
-  cognitoUserPoolsTokenProvider.setKeyValueStorage(sharedInMemoryStorage)
-
   Amplify.configure(
     {
       Auth: {
@@ -91,6 +87,24 @@ export async function getCurrentAuthTokens() {
   ensureConfigured()
   const session = await fetchAuthSession()
   return mapSessionTokens(session)
+}
+
+/**
+ * Ask Amplify for the current tokens, letting it transparently refresh
+ * when the access/id token is near expiry. Returns null when there is
+ * no valid session (user should re-login).
+ */
+export async function refreshAuthTokens(): Promise<AuthTokens | null> {
+  if (!isAmplifyAuthConfigured()) return null
+  try {
+    ensureConfigured()
+    const session = await fetchAuthSession({ forceRefresh: false })
+    const tokens = mapSessionTokens(session)
+    if (!tokens.accessToken && !tokens.idToken) return null
+    return tokens
+  } catch {
+    return null
+  }
 }
 
 function mapAdditionalSignInStep(nextStep?: string): never {

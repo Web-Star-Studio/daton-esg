@@ -14,6 +14,13 @@ export type SdgSelection = {
   resultado: string
 }
 
+export type IndicatorValue = {
+  tema: string
+  indicador: string
+  unidade: string
+  value: string
+}
+
 export type ProjectRecord = {
   id: string
   org_name: string
@@ -25,6 +32,7 @@ export type ProjectRecord = {
   status: string
   material_topics: MaterialTopic[] | Record<string, unknown> | null
   sdg_goals: SdgSelection[] | Record<string, unknown> | null
+  indicator_values: IndicatorValue[] | null
   created_at: string
   updated_at: string
 }
@@ -41,6 +49,7 @@ export type ProjectCreateInput = {
 export type ProjectUpdateInput = Partial<ProjectCreateInput> & {
   material_topics?: MaterialTopic[] | null
   sdg_goals?: SdgSelection[] | null
+  indicator_values?: IndicatorValue[] | null
   status?: string
 }
 

@@ -55,6 +55,7 @@ describe('App', () => {
                 status: 'collecting',
                 material_topics: null,
                 sdg_goals: null,
+                indicator_values: null,
                 created_at: '2026-04-06T00:00:00Z',
                 updated_at: '2026-04-06T00:00:00Z',
               },

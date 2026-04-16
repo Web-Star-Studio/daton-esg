@@ -8,6 +8,7 @@ import {
   completeNewPasswordChallenge,
   getCurrentAuthTokens,
   isAmplifyAuthConfigured,
+  refreshAuthTokens,
   signInWithEmailPassword,
   signOutFromCognito,
 } from '../services/amplify-auth'
@@ -125,6 +126,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       active = false
     }
   }, [])
+
+  // Proactively refresh tokens every 10 minutes so the session never goes
+  // stale while the user is actively using the app.
+  useEffect(() => {
+    if (!user) return
+
+    const REFRESH_INTERVAL_MS = 10 * 60 * 1000
+
+    const id = setInterval(async () => {
+      const tokens = await refreshAuthTokens()
+      if (tokens) {
+        const bearer = getBearerToken(tokens)
+        if (bearer) {
+          setApiAuthToken(bearer)
+          setAccessToken(tokens.accessToken)
+          setIdToken(tokens.idToken)
+          return
+        }
+      }
+      // Refresh failed — force logout so user doesn't get stuck
+      setApiAuthToken(null)
+      setAccessToken(null)
+      setIdToken(null)
+      setUser(null)
+    }, REFRESH_INTERVAL_MS)
+
+    return () => clearInterval(id)
+  }, [user])
 
   async function login(email: string, password: string) {
     setIsLoading(true)

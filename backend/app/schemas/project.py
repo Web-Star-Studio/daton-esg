@@ -23,6 +23,15 @@ class MaterialTopic(BaseModel):
         return normalized
 
 
+class IndicatorValue(BaseModel):
+    """A single indicator value entered by the consultant."""
+
+    tema: str = Field(min_length=1, max_length=64)
+    indicador: str = Field(min_length=1, max_length=255)
+    unidade: str = Field(max_length=64, default="")
+    value: str = Field(max_length=255)
+
+
 class SdgSelection(BaseModel):
     """One selected SDG with optional consultant narrative about the org's alignment."""
 
@@ -81,6 +90,7 @@ class ProjectUpdate(BaseModel):
     status: ProjectStatus | None = None
     material_topics: list[MaterialTopic] | None = None
     sdg_goals: list[SdgSelection] | None = None
+    indicator_values: list[IndicatorValue] | None = None
 
     @field_validator("org_name")
     @classmethod
@@ -123,5 +133,6 @@ class ProjectResponse(BaseModel):
     status: ProjectStatus
     material_topics: dict[str, Any] | list[Any] | None
     sdg_goals: dict[str, Any] | list[Any] | None
+    indicator_values: list[Any] | None
     created_at: datetime
     updated_at: datetime

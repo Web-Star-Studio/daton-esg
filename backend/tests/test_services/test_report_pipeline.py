@@ -17,6 +17,10 @@ from uuid import uuid4
 
 import pytest
 
+from app.services.report_inline_gap_classifier import (
+    InlineGapClassificationResult,
+    InlineGapFinding,
+)
 from app.services.report_pipeline import (
     AgentResult,
     PipelineContext,
@@ -122,6 +126,19 @@ async def test_run_single_agent_success() -> None:
             new_callable=AsyncMock,
             return_value=[],
         ),
+        patch(
+            "app.services.report_pipeline.classify_inline_gaps",
+            new_callable=AsyncMock,
+            return_value=InlineGapClassificationResult(
+                cleaned_content=(
+                    "A organizacao (GRI 2-1) foi fundada em 2016. "
+                    "Opera no setor de logistica.\n\n"
+                    "Enquadramento ESG e normativo\n"
+                    "- Pilares ESG: E\n- GRI aplicavel: GRI 2-1\n"
+                ),
+                findings=[],
+            ),
+        ),
         patch("app.services.report_pipeline.SessionLocal") as mock_session_cls,
         patch("langchain_openai.ChatOpenAI", return_value=fake_llm),
     ):
@@ -218,6 +235,17 @@ async def test_run_single_agent_strips_invalid_gri_codes() -> None:
             new_callable=AsyncMock,
             return_value=[],
         ),
+        patch(
+            "app.services.report_pipeline.classify_inline_gaps",
+            new_callable=AsyncMock,
+            return_value=InlineGapClassificationResult(
+                cleaned_content=(
+                    "A organizacao (GRI 2-1) opera. Mencionando inexistente.\n\n"
+                    "Enquadramento ESG e normativo\n- Pilares ESG: G\n"
+                ),
+                findings=[],
+            ),
+        ),
         patch("app.services.report_pipeline.SessionLocal") as mock_session_cls,
         patch("langchain_openai.ChatOpenAI", return_value=fake_llm),
     ):
@@ -282,6 +310,69 @@ async def test_run_single_agent_removes_inline_gap_diagnostics() -> None:
             new_callable=AsyncMock,
             return_value=[],
         ),
+        patch(
+            "app.services.report_pipeline.classify_inline_gaps",
+            new_callable=AsyncMock,
+            return_value=InlineGapClassificationResult(
+                cleaned_content=(
+                    "A organizacao (GRI 2-1) foi fundada em 2016 e opera no setor "
+                    "de logistica.\n\n"
+                    "Enquadramento ESG e normativo\n"
+                    "- Pilares ESG: E / S / G\n"
+                    "- GRI aplicavel: GRI 2-1 | GRI 2-2 | GRI 2-6\n"
+                ),
+                findings=[
+                    InlineGapFinding(
+                        excerpt=(
+                            "A ausência de dados quantitativos específicos "
+                            "limita a profundidade da análise."
+                        ),
+                        title="Diagnóstico de ausência de dados removido do texto",
+                        recommendation=(
+                            "Registrar a ausência de dados como lacuna estruturada "
+                            "e complementar a pasta da seção com métricas "
+                            "quantitativas verificáveis."
+                        ),
+                        severity="warning",
+                        priority="medium",
+                        missing_data_type=(
+                            "Dado factual ou quantitativo ausente no texto-fonte"
+                        ),
+                        suggested_document=(
+                            "Documento institucional, planilha operacional ou "
+                            "evidência primária da pasta da seção"
+                        ),
+                        related_gri_codes=["GRI 2-1", "GRI 2-2", "GRI 2-6"],
+                    ),
+                    InlineGapFinding(
+                        excerpt=(
+                            "No entanto, não foram disponibilizados dados "
+                            "específicos sobre o número de unidades, "
+                            "colaboradores, frota ou mercados atendidos."
+                        ),
+                        title=(
+                            "Diagnóstico de dados não disponibilizados removido "
+                            "do texto"
+                        ),
+                        recommendation=(
+                            "Indicar essa falta na página de lacunas e solicitar "
+                            "evidências objetivas sobre unidades, colaboradores, "
+                            "frota, mercados ou demais elementos citados."
+                        ),
+                        severity="warning",
+                        priority="medium",
+                        missing_data_type=(
+                            "Dado factual ou quantitativo ausente no texto-fonte"
+                        ),
+                        suggested_document=(
+                            "Documento institucional, planilha operacional ou "
+                            "evidência primária da pasta da seção"
+                        ),
+                        related_gri_codes=["GRI 2-1", "GRI 2-2", "GRI 2-6"],
+                    ),
+                ],
+            ),
+        ),
         patch("app.services.report_pipeline.SessionLocal") as mock_session_cls,
         patch("langchain_openai.ChatOpenAI", return_value=fake_llm),
     ):
@@ -319,7 +410,10 @@ async def test_run_single_agent_removes_inline_gap_diagnostics() -> None:
         == "Documento institucional, planilha operacional ou evidência primária da pasta da seção"
         for gap in inline_gap_warnings
     )
-    assert all(gap.get("related_gri_codes") is None for gap in inline_gap_warnings)
+    assert all(
+        gap.get("related_gri_codes") == ["GRI 2-1", "GRI 2-2", "GRI 2-6"]
+        for gap in inline_gap_warnings
+    )
     assert any(
         gap["title"] == "Diagnóstico de ausência de dados removido do texto"
         for gap in inline_gap_warnings
@@ -364,6 +458,17 @@ async def test_audit_trail_captures_rag_metadata() -> None:
             "app.services.report_pipeline.retrieve_framework_reference",
             new_callable=AsyncMock,
             return_value=[],
+        ),
+        patch(
+            "app.services.report_pipeline.classify_inline_gaps",
+            new_callable=AsyncMock,
+            return_value=InlineGapClassificationResult(
+                cleaned_content=(
+                    "Texto (GRI 302-1).\n\n"
+                    "Enquadramento ESG e normativo\n- Pilares ESG: E\n"
+                ),
+                findings=[],
+            ),
         ),
         patch("app.services.report_pipeline.SessionLocal") as mock_session_cls,
         patch("langchain_openai.ChatOpenAI", return_value=fake_llm),

@@ -3,13 +3,8 @@ import {
   useProjectShellRegistration,
   useProjectWorkspace,
 } from '../hooks/use-project-workspace'
-import {
-  fetchIndicatorTemplates,
-  fetchOdsGoals,
-  updateProject,
-} from '../services/api-client'
+import { fetchOdsGoals, updateProject } from '../services/api-client'
 import type {
-  IndicatorTemplateRecord,
   MaterialTopic,
   MaterialTopicPillar,
   OdsGoalRecord,
@@ -22,16 +17,24 @@ const PILLAR_LABELS: Record<MaterialTopicPillar, string> = {
   G: 'Governança (G)',
 }
 
-// Map indicator `tema` (from the seed Indicadores ESG sheet) to an ESG pillar.
-// Keys must match values seeded in indicator_templates.tema.
-const TEMA_TO_PILLAR: Record<string, MaterialTopicPillar> = {
-  'Clima e Energia': 'E',
-  Água: 'E',
-  Resíduos: 'E',
-  'Capital Humano': 'S',
-  'Saúde e Segurança do Trabalho': 'S',
-  'Desempenho Econômico': 'G',
-  'Governança / Ética': 'G',
+const MATERIAL_TOPICS_CATALOG: Record<MaterialTopicPillar, string[]> = {
+  E: [
+    'Descarbonização e GEE',
+    'Biodiversidade e Bioeconomia',
+    'Gestão de Resíduos e Economia Circular',
+    'Transição Energética',
+  ],
+  S: [
+    'Diversidade, Equidade e Inclusão (DEI)',
+    'Direitos Humanos e Relações Trabalhistas',
+    'Saúde e Segurança',
+    'Engajamento Comunitário',
+  ],
+  G: [
+    'Ética, Anticorrupção e Compliance',
+    'Governança Corporativa e Liderança',
+    'Transparência, Credibilidade e Dados',
+  ],
 }
 
 function normalizeMaterialTopics(raw: unknown): MaterialTopic[] {
@@ -116,9 +119,6 @@ export function ProjectMaterialityPage() {
     pageTitle: 'Materialidade & ODS',
   })
 
-  const [indicatorTemplates, setIndicatorTemplates] = useState<
-    IndicatorTemplateRecord[]
-  >([])
   const [odsGoals, setOdsGoals] = useState<OdsGoalRecord[]>([])
   const [topicSelections, setTopicSelections] = useState<MaterialTopic[]>([])
   const [sdgSelections, setSdgSelections] = useState<SdgSelection[]>([])
@@ -133,12 +133,8 @@ export function ProjectMaterialityPage() {
       setIsLoading(true)
       setPageError(null)
       try {
-        const [indicators, goals] = await Promise.all([
-          fetchIndicatorTemplates(),
-          fetchOdsGoals(),
-        ])
+        const goals = await fetchOdsGoals()
         if (!active) return
-        setIndicatorTemplates(indicators)
         setOdsGoals(goals)
       } catch (error) {
         if (!active) return
@@ -163,26 +159,14 @@ export function ProjectMaterialityPage() {
     setSdgSelections(normalizeSdgGoals(project.sdg_goals))
   }, [project])
 
-  const pillarTopics = useMemo<
-    Record<MaterialTopicPillar, PillarTopic[]>
-  >(() => {
-    const grouped: Record<MaterialTopicPillar, PillarTopic[]> = {
-      E: [],
-      S: [],
-      G: [],
-    }
-    for (const template of indicatorTemplates) {
-      const pillar = TEMA_TO_PILLAR[template.tema]
-      if (!pillar) continue
-      const already = grouped[pillar].some(
-        (entry) => entry.topic === template.tema
-      )
-      if (!already) {
-        grouped[pillar].push({ pillar, topic: template.tema })
-      }
-    }
-    return grouped
-  }, [indicatorTemplates])
+  const pillarTopics = useMemo<Record<MaterialTopicPillar, PillarTopic[]>>(
+    () => ({
+      E: MATERIAL_TOPICS_CATALOG.E.map((topic) => ({ pillar: 'E', topic })),
+      S: MATERIAL_TOPICS_CATALOG.S.map((topic) => ({ pillar: 'S', topic })),
+      G: MATERIAL_TOPICS_CATALOG.G.map((topic) => ({ pillar: 'G', topic })),
+    }),
+    []
+  )
 
   function isTopicSelected(pillar: MaterialTopicPillar, topic: string) {
     return topicSelections.some(

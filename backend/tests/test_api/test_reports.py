@@ -328,3 +328,51 @@ def test_patch_report_section(monkeypatch, reports_app) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["sections"][0]["content"] == "Texto atualizado."
+
+
+def test_delete_report(monkeypatch, reports_app) -> None:
+    app, _session, user = reports_app
+    project = _make_project(user)
+    report = _make_report(project)
+
+    async def fake_get_project_for_user(_session, _pid, _uid):
+        return project
+
+    async def fake_delete_report(_session, *, project_id, report_id):
+        pass
+
+    monkeypatch.setattr(
+        "app.api.reports.get_project_for_user", fake_get_project_for_user
+    )
+    monkeypatch.setattr("app.api.reports.delete_report", fake_delete_report)
+
+    with TestClient(app) as client:
+        response = client.delete(f"/api/v1/projects/{project.id}/reports/{report.id}")
+
+    assert response.status_code == 204
+
+
+def test_delete_report_409_while_generating(monkeypatch, reports_app) -> None:
+    app, _session, user = reports_app
+    project = _make_project(user)
+
+    async def fake_get_project_for_user(_session, _pid, _uid):
+        return project
+
+    async def fake_delete_report(_session, *, project_id, report_id):
+        from app.services.report_service import ReportConflictError
+
+        raise ReportConflictError(
+            "Relatório em geração — aguarde a conclusão para excluir."
+        )
+
+    monkeypatch.setattr(
+        "app.api.reports.get_project_for_user", fake_get_project_for_user
+    )
+    monkeypatch.setattr("app.api.reports.delete_report", fake_delete_report)
+
+    with TestClient(app) as client:
+        response = client.delete(f"/api/v1/projects/{project.id}/reports/{uuid4()}")
+
+    assert response.status_code == 409
+    assert "geração" in response.json()["detail"].lower()

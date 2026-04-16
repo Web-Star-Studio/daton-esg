@@ -5,7 +5,6 @@ import { ProjectWorkspaceLayout } from '../components/project-workspace-layout'
 import { useAuth } from '../hooks/use-auth'
 import { ProjectMaterialityPage } from '../pages/project-materiality-page'
 import {
-  fetchIndicatorTemplates,
   fetchOdsGoals,
   fetchProject,
   fetchProjects,
@@ -32,7 +31,6 @@ vi.mock('../services/api-client', () => ({
 const mockUseAuth = vi.mocked(useAuth)
 const mockFetchProject = vi.mocked(fetchProject)
 const mockFetchProjects = vi.mocked(fetchProjects)
-const mockFetchIndicatorTemplates = vi.mocked(fetchIndicatorTemplates)
 const mockFetchOdsGoals = vi.mocked(fetchOdsGoals)
 const mockUpdateProject = vi.mocked(updateProject)
 
@@ -47,6 +45,7 @@ const baseProject = {
   status: 'collecting',
   material_topics: null,
   sdg_goals: null,
+  indicator_values: null,
   created_at: '2026-04-06T00:00:00Z',
   updated_at: '2026-04-06T00:00:00Z',
 }
@@ -74,28 +73,10 @@ describe('ProjectMaterialityPage', () => {
     })
     mockFetchProject.mockReset()
     mockFetchProjects.mockReset()
-    mockFetchIndicatorTemplates.mockReset()
     mockFetchOdsGoals.mockReset()
     mockUpdateProject.mockReset()
     mockFetchProject.mockResolvedValue(baseProject)
     mockFetchProjects.mockResolvedValue([baseProject])
-    mockFetchIndicatorTemplates.mockResolvedValue([
-      {
-        tema: 'Clima e Energia',
-        indicador: 'Consumo de energia',
-        unidade: 'kWh/ano',
-      },
-      {
-        tema: 'Capital Humano',
-        indicador: 'Horas de treinamento',
-        unidade: 'h/ano',
-      },
-      {
-        tema: 'Governança / Ética',
-        indicador: 'Denúncias resolvidas',
-        unidade: 'unidades',
-      },
-    ])
     mockFetchOdsGoals.mockResolvedValue([
       {
         ods_number: 7,
@@ -130,7 +111,7 @@ describe('ProjectMaterialityPage', () => {
     )
   }
 
-  it('renders pillars and topics fetched from the reference API', async () => {
+  it('renders pillars and topics from the static catalog', async () => {
     renderPage()
 
     expect(
@@ -141,9 +122,13 @@ describe('ProjectMaterialityPage', () => {
     ).toBeInTheDocument()
 
     await waitFor(() => {
-      expect(screen.getByText('Clima e Energia')).toBeInTheDocument()
-      expect(screen.getByText('Capital Humano')).toBeInTheDocument()
-      expect(screen.getByText('Governança / Ética')).toBeInTheDocument()
+      expect(screen.getByText('Descarbonização e GEE')).toBeInTheDocument()
+      expect(
+        screen.getByText('Diversidade, Equidade e Inclusão (DEI)')
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText('Ética, Anticorrupção e Compliance')
+      ).toBeInTheDocument()
     })
   })
 
@@ -161,10 +146,18 @@ describe('ProjectMaterialityPage', () => {
     renderPage()
 
     await waitFor(() => {
-      expect(screen.getByText('Clima e Energia')).toBeInTheDocument()
+      expect(screen.getByText('Descarbonização e GEE')).toBeInTheDocument()
     })
 
-    fireEvent.click(screen.getByRole('checkbox', { name: /clima e energia/i }))
+    const topicCheckbox = screen.getByRole('checkbox', {
+      name: /descarbonização e gee/i,
+    })
+    fireEvent.click(topicCheckbox)
+
+    await waitFor(() => {
+      expect(topicCheckbox).toBeChecked()
+    })
+
     fireEvent.click(
       screen.getByRole('checkbox', { name: /ods 7.*energia limpa/i })
     )
@@ -178,7 +171,7 @@ describe('ProjectMaterialityPage', () => {
     const call = mockUpdateProject.mock.calls[0]
     expect(call[0]).toBe('project-1')
     expect(call[1].material_topics).toEqual([
-      { pillar: 'E', topic: 'Clima e Energia', priority: 3 },
+      { pillar: 'E', topic: 'Descarbonização e GEE', priority: 3 },
     ])
     expect(call[1].sdg_goals).toEqual([
       {

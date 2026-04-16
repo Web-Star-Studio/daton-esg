@@ -33,40 +33,14 @@ from app.services.rag_retrieval_service import (
     retrieve_framework_reference,
     retrieve_project_context,
 )
+from app.services.report_inline_gap_classifier import (
+    InlineGapClassifierContext,
+    classify_inline_gaps,
+)
 from app.services.report_sections import REPORT_SECTIONS, ReportSectionTemplate
 from app.services.vocabulary_linter import lint as lint_vocabulary
 
 logger = logging.getLogger(__name__)
-
-_INLINE_GAP_PATTERNS: tuple[tuple[re.Pattern[str], str, str], ...] = (
-    (
-        re.compile(r"(?i)\ba ausência de dados quantitativos específicos limita\b"),
-        "Diagnóstico de ausência de dados removido do texto",
-        "Registrar a ausência de dados como lacuna estruturada e complementar a pasta da seção com métricas quantitativas verificáveis.",
-    ),
-    (
-        re.compile(r"(?i)\bn[oã]o foram disponibilizados dados específicos sobre\b"),
-        "Diagnóstico de dados não disponibilizados removido do texto",
-        "Indicar essa falta na página de lacunas e solicitar evidências objetivas sobre unidades, colaboradores, frota, mercados ou demais elementos citados.",
-    ),
-    (
-        re.compile(r"(?i)\ba ausência de indicadores quantitativos impede\b"),
-        "Diagnóstico de ausência de indicadores removido do texto",
-        "Mover a recomendação para a página de lacunas e orientar a coleta de indicadores compatíveis com os GRI aplicáveis à seção.",
-    ),
-    (
-        re.compile(r"(?i)\brecomenda-se a implementa[cç][aã]o futura de indicadores\b"),
-        "Recomendação operacional removida do corpo da seção",
-        "Apresentar recomendações de estruturação de indicadores na página de lacunas, sem mantê-las no conteúdo final da seção.",
-    ),
-    (
-        re.compile(r"(?i)\ba ausência atual de dados específicos limita\b"),
-        "Diagnóstico de limitação analítica removido do texto",
-        "Converter a limitação em lacuna acionável e orientar a complementação documental antes da próxima regeneração.",
-    ),
-)
-
-_SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[\.\!\?])\s+")
 
 
 def _gap_group_for_category(category: str) -> str:
@@ -178,58 +152,6 @@ def _build_gap(
     }
 
 
-def _strip_inline_gap_diagnostics(
-    content: str,
-    *,
-    section_key: str,
-) -> tuple[str, list[dict[str, Any]]]:
-    paragraphs = content.split("\n\n")
-    cleaned_paragraphs: list[str] = []
-    new_gaps: list[dict[str, Any]] = []
-
-    for paragraph in paragraphs:
-        if not paragraph.strip():
-            continue
-        if paragraph.lstrip().startswith("Enquadramento ESG e normativo"):
-            cleaned_paragraphs.append(paragraph)
-            continue
-
-        parts = _SENTENCE_SPLIT_PATTERN.split(paragraph.strip())
-        kept_parts: list[str] = []
-
-        for part in parts:
-            stripped_part = part.strip()
-            if not stripped_part:
-                continue
-
-            matched = False
-            for pattern, title, recommendation in _INLINE_GAP_PATTERNS:
-                if pattern.search(stripped_part):
-                    new_gaps.append(
-                        _build_gap(
-                            section_key=section_key,
-                            category="inline_gap_warning",
-                            detail=stripped_part,
-                            title=title,
-                            recommendation=recommendation,
-                            severity="warning",
-                            missing_data_type="Dado factual ou quantitativo ausente no texto-fonte",
-                            suggested_document="Documento institucional, planilha operacional ou evidência primária da pasta da seção",
-                        )
-                    )
-                    matched = True
-                    break
-
-            if not matched:
-                kept_parts.append(stripped_part)
-
-        if kept_parts:
-            cleaned_paragraphs.append(" ".join(kept_parts))
-
-    cleaned_content = "\n\n".join(cleaned_paragraphs)
-    return cleaned_content, new_gaps
-
-
 _INLINE_GRI_PATTERN = re.compile(r"\(GRI\s+\d{1,3}-\d+[a-z]?\)", re.IGNORECASE)
 _GRI_CODE_EXTRACT_PATTERN = re.compile(r"GRI\s+(\d{1,3})-(\d+[a-z]?)", re.IGNORECASE)
 _ENQUADRAMENTO_HEADER_PATTERN = re.compile(
@@ -308,13 +230,29 @@ def _format_sdg_goals(goals: list[dict[str, Any]] | None) -> str:
 def _format_indicators(indicators: Any) -> str:
     if not indicators:
         return "Nenhum indicador quantitativo registrado pelo consultor."
+    if isinstance(indicators, list):
+        lines: list[str] = []
+        for item in indicators:
+            if isinstance(item, dict):
+                name = item.get("indicador", "")
+                value = item.get("value", "")
+                unit = item.get("unidade", "")
+                tema = item.get("tema", "")
+                if value:
+                    prefix = f"[{tema}] " if tema else ""
+                    lines.append(f"- {prefix}{name}: {value} {unit}".strip())
+            else:
+                lines.append(f"- {item}")
+        return (
+            "\n".join(lines)
+            if lines
+            else "Nenhum indicador quantitativo registrado pelo consultor."
+        )
     if isinstance(indicators, dict):
         items = list(indicators.items())
         return "\n".join(
             f"- {key}: {value}" for key, value in items if value not in (None, "")
         )
-    if isinstance(indicators, list):
-        return "\n".join(f"- {item}" for item in indicators)
     return str(indicators)
 
 
@@ -553,7 +491,7 @@ async def load_project_context(state: ReportGraphState) -> dict[str, Any]:
         "gri_code_definitions": definitions,
         "material_topics": topics,
         "sdg_goals": sdgs,
-        "project_indicators": None,  # current indicators form not yet ingested here
+        "project_indicators": project.indicator_values,
         "current_section_index": 0,
         "completed_sections": [],
         "gaps": [],
@@ -703,6 +641,7 @@ async def validate_and_persist(state: ReportGraphState) -> dict[str, Any]:
     session: AsyncSession = state["session"]
     template: ReportSectionTemplate = state["current_template"]
     report_id: UUID = state["report_id"]
+    settings: Settings = state["settings"]
     valid_codes: set[str] = state.get("valid_gri_codes", set())
     content = state.get("draft_content", "")
     new_gaps: list[dict[str, Any]] = []
@@ -755,11 +694,31 @@ async def validate_and_persist(state: ReportGraphState) -> dict[str, Any]:
             )
         )
 
-    cleaned_content, inline_gap_warnings = _strip_inline_gap_diagnostics(
-        cleaned_content,
-        section_key=template.key,
+    inline_gap_result = await classify_inline_gaps(
+        settings=settings,
+        ctx=InlineGapClassifierContext(
+            section_key=template.key,
+            section_title=template.title,
+            gri_codes=template.gri_codes,
+            content=cleaned_content,
+        ),
     )
-    new_gaps.extend(inline_gap_warnings)
+    cleaned_content = inline_gap_result.cleaned_content
+    for finding in inline_gap_result.findings:
+        new_gaps.append(
+            _build_gap(
+                section_key=template.key,
+                category="inline_gap_warning",
+                detail=finding.excerpt,
+                title=finding.title,
+                recommendation=finding.recommendation,
+                severity=finding.severity,
+                priority=finding.priority,
+                missing_data_type=finding.missing_data_type,
+                suggested_document=finding.suggested_document,
+                related_gri_codes=finding.related_gri_codes or list(template.gri_codes),
+            )
+        )
 
     # vocabulary linter
     lint_result = lint_vocabulary(cleaned_content)

@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     rag_chunk_size_chars: int = 2000
     rag_chunk_overlap_chars: int = 300
     rag_tabular_rows_per_chunk: int = 25
-    openai_chat_model: str = "gpt-4.1-mini"
+    openai_chat_model: str = "gpt-5.4"
     openai_chat_temperature: float = 0.0
     openai_chat_max_output_tokens: int = 1200
     agent_chat_retrieval_top_k: int = 8
@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     agent_chat_system_prompt_version: str = "v1"
     gri_reference_namespace: str = "__reference__gri-2021-pt"
     gri_reference_top_k: int = 3
-    report_generation_model: str = "gpt-4.1-mini"
+    report_generation_model: str = "gpt-5.4"
     report_generation_temperature: float = 0.0
     report_generation_max_output_tokens: int = 6000
     report_rag_top_k: int = 10

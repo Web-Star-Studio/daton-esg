@@ -63,6 +63,11 @@ export const DOCUMENT_DIRECTORIES: DocumentDirectory[] = [
     label: '11. Auditorias e Avaliações',
     order: 11,
   },
+  {
+    key: 'outros',
+    label: '12. Outros',
+    order: 12,
+  },
 ]
 
 export const LEGACY_UNCATEGORIZED_DIRECTORY: DocumentDirectory = {

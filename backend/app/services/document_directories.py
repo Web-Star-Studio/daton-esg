@@ -68,6 +68,11 @@ DOCUMENT_DIRECTORIES: tuple[DocumentDirectory, ...] = (
         label="11. Auditorias e Avaliações",
         order=11,
     ),
+    DocumentDirectory(
+        key="outros",
+        label="12. Outros",
+        order=12,
+    ),
 )
 
 LEGACY_UNCATEGORIZED_DIRECTORY = DocumentDirectory(

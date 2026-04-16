@@ -50,6 +50,7 @@ class Project(Base):
     sdg_goals: Mapped[dict[str, Any] | list[Any] | None] = mapped_column(
         JSONB, nullable=True
     )
+    indicator_values: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

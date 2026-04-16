@@ -1,3 +1,4 @@
+import { refreshAuthTokens } from './amplify-auth'
 import type { AuthenticatedUser } from '../types/auth'
 import type {
   CreateProjectDocumentUploadInput,
@@ -43,10 +44,21 @@ async function apiFetch(path: string, init: RequestInit = {}) {
     headers.set('Authorization', `Bearer ${authToken}`)
   }
 
-  return fetch(path, {
-    ...init,
-    headers,
-  })
+  const response = await fetch(path, { ...init, headers })
+
+  // On 401 try a transparent token refresh + single retry
+  if (response.status === 401 && authToken) {
+    const tokens = await refreshAuthTokens()
+    const bearer = tokens?.idToken ?? tokens?.accessToken
+    if (bearer) {
+      authToken = bearer
+      const retryHeaders = new Headers(init.headers)
+      retryHeaders.set('Authorization', `Bearer ${bearer}`)
+      return fetch(path, { ...init, headers: retryHeaders })
+    }
+  }
+
+  return response
 }
 
 async function parseApiError(
@@ -618,6 +630,19 @@ export async function updateReportSection(
     )
   }
   return (await response.json()) as ReportRecord
+}
+
+export async function deleteReport(projectId: string, reportId: string) {
+  const response = await apiFetch(
+    `/api/v1/projects/${projectId}/reports/${reportId}`,
+    { method: 'DELETE' }
+  )
+  if (!response.ok) {
+    throw await parseApiError(
+      response,
+      `Falha ao excluir o relatório (${response.status}).`
+    )
+  }
 }
 
 export async function exportReportDocx(projectId: string, reportId: string) {

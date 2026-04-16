@@ -16,7 +16,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
-import re
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -45,6 +44,10 @@ from app.services.rag_retrieval_service import (
     retrieve_framework_reference,
     retrieve_project_context,
 )
+from app.services.report_inline_gap_classifier import (
+    InlineGapClassifierContext,
+    classify_inline_gaps,
+)
 from app.services.report_sections import REPORT_SECTIONS, ReportSectionTemplate
 from app.services.section_agent_profiles import (
     SECTION_AGENT_PROFILES,
@@ -53,36 +56,6 @@ from app.services.section_agent_profiles import (
 from app.services.vocabulary_linter import lint as lint_vocabulary
 
 logger = logging.getLogger(__name__)
-
-_INLINE_GAP_PATTERNS: tuple[tuple[re.Pattern[str], str, str], ...] = (
-    (
-        re.compile(r"(?i)\ba ausência de dados quantitativos específicos limita\b"),
-        "Diagnóstico de ausência de dados removido do texto",
-        "Registrar a ausência de dados como lacuna estruturada e complementar a pasta da seção com métricas quantitativas verificáveis.",
-    ),
-    (
-        re.compile(r"(?i)\bn[oã]o foram disponibilizados dados específicos sobre\b"),
-        "Diagnóstico de dados não disponibilizados removido do texto",
-        "Indicar essa falta na página de lacunas e solicitar evidências objetivas sobre unidades, colaboradores, frota, mercados ou demais elementos citados.",
-    ),
-    (
-        re.compile(r"(?i)\ba ausência de indicadores quantitativos impede\b"),
-        "Diagnóstico de ausência de indicadores removido do texto",
-        "Mover a recomendação para a página de lacunas e orientar a coleta de indicadores compatíveis com os GRI aplicáveis à seção.",
-    ),
-    (
-        re.compile(r"(?i)\brecomenda-se a implementa[cç][aã]o futura de indicadores\b"),
-        "Recomendação operacional removida do corpo da seção",
-        "Apresentar recomendações de estruturação de indicadores na página de lacunas, sem mantê-las no conteúdo final da seção.",
-    ),
-    (
-        re.compile(r"(?i)\ba ausência atual de dados específicos limita\b"),
-        "Diagnóstico de limitação analítica removido do texto",
-        "Converter a limitação em lacuna acionável e orientar a complementação documental antes da próxima regeneração.",
-    ),
-)
-
-_SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[\.\!\?])\s+")
 
 
 def _gap_group_for_category(category: str) -> str:
@@ -194,58 +167,6 @@ def _build_gap(
     }
 
 
-def _strip_inline_gap_diagnostics(
-    content: str,
-    *,
-    section_key: str,
-) -> tuple[str, list[dict[str, Any]]]:
-    paragraphs = content.split("\n\n")
-    cleaned_paragraphs: list[str] = []
-    new_gaps: list[dict[str, Any]] = []
-
-    for paragraph in paragraphs:
-        if not paragraph.strip():
-            continue
-        if paragraph.lstrip().startswith("Enquadramento ESG e normativo"):
-            cleaned_paragraphs.append(paragraph)
-            continue
-
-        parts = _SENTENCE_SPLIT_PATTERN.split(paragraph.strip())
-        kept_parts: list[str] = []
-
-        for part in parts:
-            stripped_part = part.strip()
-            if not stripped_part:
-                continue
-
-            matched = False
-            for pattern, title, recommendation in _INLINE_GAP_PATTERNS:
-                if pattern.search(stripped_part):
-                    new_gaps.append(
-                        _build_gap(
-                            section_key=section_key,
-                            category="inline_gap_warning",
-                            detail=stripped_part,
-                            title=title,
-                            recommendation=recommendation,
-                            severity="warning",
-                            missing_data_type="Dado factual ou quantitativo ausente no texto-fonte",
-                            suggested_document="Documento institucional, planilha operacional ou evidência primária da pasta da seção",
-                        )
-                    )
-                    matched = True
-                    break
-
-            if not matched:
-                kept_parts.append(stripped_part)
-
-        if kept_parts:
-            cleaned_paragraphs.append(" ".join(kept_parts))
-
-    cleaned_content = "\n\n".join(cleaned_paragraphs)
-    return cleaned_content, new_gaps
-
-
 # ------------------------------ data classes --------------------------------
 
 
@@ -328,7 +249,7 @@ async def load_pipeline_context(
         gri_code_definitions=definitions,
         material_topics=topics,
         sdg_goals=sdgs,
-        project_indicators=None,
+        project_indicators=project.indicator_values,
     )
 
 
@@ -562,12 +483,31 @@ async def _run_agent_inner(
     cleaned, invalid_codes = _strip_invalid_gri_parentheticals(
         content, ctx.valid_gri_codes
     )
-    inline_gap_cleaned, inline_gap_warnings = _strip_inline_gap_diagnostics(
-        cleaned,
-        section_key=template.key,
+    inline_gap_result = await classify_inline_gaps(
+        settings=settings,
+        ctx=InlineGapClassifierContext(
+            section_key=template.key,
+            section_title=template.title,
+            gri_codes=template.gri_codes,
+            content=cleaned,
+        ),
     )
-    cleaned = inline_gap_cleaned
-    new_gaps.extend(inline_gap_warnings)
+    cleaned = inline_gap_result.cleaned_content
+    for finding in inline_gap_result.findings:
+        new_gaps.append(
+            _build_gap(
+                section_key=template.key,
+                category="inline_gap_warning",
+                detail=finding.excerpt,
+                title=finding.title,
+                recommendation=finding.recommendation,
+                severity=finding.severity,
+                priority=finding.priority,
+                missing_data_type=finding.missing_data_type,
+                suggested_document=finding.suggested_document,
+                related_gri_codes=finding.related_gri_codes or list(template.gri_codes),
+            )
+        )
     for bad in invalid_codes:
         new_gaps.append(
             _build_gap(
