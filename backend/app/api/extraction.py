@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import AsyncGenerator
-from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -24,6 +23,7 @@ from app.models.enums import (
 )
 from app.schemas.extraction import (
     BulkUpdateRequest,
+    BulkUpdateResponse,
     ExtractionRunResponse,
     ExtractionSuggestionList,
     ExtractionSuggestionResponse,
@@ -100,7 +100,7 @@ async def stream_run(
     await get_project_for_user(session, project_id, current_user.id)
     run = await get_run(session, project_id=project_id, run_id=run_id)
 
-    queue: asyncio.Queue[Any] = asyncio.Queue()
+    queue: asyncio.Queue[object | None] = asyncio.Queue()
 
     async def _replay_terminal() -> AsyncGenerator[bytes, None]:
         yield sse_event(
@@ -133,11 +133,32 @@ async def stream_run(
         )
 
     async def _live() -> AsyncGenerator[bytes, None]:
-        # Run the orchestrator in this same task while we read the queue concurrently.
+        # Run the orchestrator concurrently; race queue.get() against the
+        # producer so we never block forever if the producer exits without a
+        # sentinel (defensive hardening).
         producer = asyncio.create_task(run_extraction(run.id, event_queue=queue))
         try:
             while True:
-                event = await queue.get()
+                getter = asyncio.create_task(queue.get())
+                done, _pending = await asyncio.wait(
+                    {producer, getter},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if producer in done:
+                    if not getter.done():
+                        getter.cancel()
+                        try:
+                            await getter
+                        except asyncio.CancelledError:
+                            pass
+                    exc = producer.exception()
+                    if exc is not None:
+                        logger.exception(
+                            "extraction.producer_failed",
+                            extra={"run_id": str(run.id)},
+                        )
+                    break
+                event = await getter
                 if event is None:
                     break
                 event_type, data = event
@@ -230,13 +251,13 @@ async def update_suggestion_endpoint(
     return ExtractionSuggestionResponse.model_validate(suggestion)
 
 
-@router.post("/suggestions/bulk")
+@router.post("/suggestions/bulk", response_model=BulkUpdateResponse)
 async def bulk_update_suggestions(
     project_id: UUID,
     payload: BulkUpdateRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
-) -> dict[str, Any]:
+) -> BulkUpdateResponse:
     await get_project_for_user(session, project_id, current_user.id)
     return await bulk_apply(
         session,

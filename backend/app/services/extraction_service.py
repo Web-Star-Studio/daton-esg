@@ -28,6 +28,7 @@ from app.models.enums import (
     ExtractionSuggestionStatus,
     ExtractionTargetKind,
 )
+from app.schemas.extraction import BulkUpdateFailedItem, BulkUpdateResponse
 
 logger = logging.getLogger(__name__)
 
@@ -320,6 +321,14 @@ async def apply_suggestion(
     return suggestion
 
 
+def _bulk_error_detail(detail: Any) -> str:
+    if isinstance(detail, str):
+        return detail
+    if detail is None:
+        return "error"
+    return str(detail)
+
+
 async def bulk_apply(
     session: AsyncSession,
     *,
@@ -327,7 +336,7 @@ async def bulk_apply(
     suggestion_ids: list[UUID],
     action: str,
     user_id: UUID | None,
-) -> dict[str, Any]:
+) -> BulkUpdateResponse:
     """Apply ``action`` to each suggestion id, best-effort.
 
     Note: this delegates to ``apply_suggestion`` per item, and that function
@@ -343,8 +352,8 @@ async def bulk_apply(
         )
 
     per_action = "accept" if action == "accept_all" else "reject"
-    succeeded: list[str] = []
-    failed: list[dict[str, Any]] = []
+    succeeded: list[UUID] = []
+    failed: list[BulkUpdateFailedItem] = []
     for suggestion_id in suggestion_ids:
         try:
             await apply_suggestion(
@@ -356,14 +365,19 @@ async def bulk_apply(
                 notes=None,
                 user_id=user_id,
             )
-            succeeded.append(str(suggestion_id))
+            succeeded.append(suggestion_id)
         except HTTPException as exc:
-            failed.append({"id": str(suggestion_id), "detail": exc.detail})
-        except Exception as exc:
+            failed.append(
+                BulkUpdateFailedItem(
+                    id=suggestion_id,
+                    detail=_bulk_error_detail(exc.detail),
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
             logger.exception(
                 "extraction.bulk_apply_failed",
                 extra={"id": str(suggestion_id)},
             )
-            failed.append({"id": str(suggestion_id), "detail": str(exc)})
+            failed.append(BulkUpdateFailedItem(id=suggestion_id, detail=str(exc)))
 
-    return {"succeeded": succeeded, "failed": failed}
+    return BulkUpdateResponse(succeeded=succeeded, failed=failed)

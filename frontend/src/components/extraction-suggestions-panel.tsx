@@ -194,7 +194,11 @@ function SuggestionCard({
         <SecondaryBtn onClick={guard(onReject)} disabled={isSubmitting}>
           Rejeitar
         </SecondaryBtn>
-        <PrimaryBtn onClick={guard(onAccept)} disabled={isSubmitting}>
+        <PrimaryBtn
+          data-testid="extraction-accept-suggestion"
+          onClick={guard(onAccept)}
+          disabled={isSubmitting}
+        >
           {suggestion.conflict_with_existing ? 'Substituir' : 'Aceitar'}
         </PrimaryBtn>
       </footer>

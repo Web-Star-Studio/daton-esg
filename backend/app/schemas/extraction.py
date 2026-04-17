@@ -187,6 +187,20 @@ class BulkUpdateRequest(BaseModel):
     action: Literal["accept_all", "reject_all"]
 
 
+class BulkUpdateFailedItem(BaseModel):
+    """One suggestion id that could not be applied in a bulk operation."""
+
+    id: UUID
+    detail: str
+
+
+class BulkUpdateResponse(BaseModel):
+    """Partial-success outcome for bulk accept/reject."""
+
+    succeeded: list[UUID]
+    failed: list[BulkUpdateFailedItem]
+
+
 class ExtractionSuggestionList(BaseModel):
     items: list[ExtractionSuggestionResponse]
     total: int

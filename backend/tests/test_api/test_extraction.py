@@ -26,6 +26,7 @@ from app.models.enums import (
     ProjectStatus,
     UserRole,
 )
+from app.schemas.extraction import BulkUpdateResponse
 
 
 class DummySession:
@@ -251,7 +252,7 @@ def test_bulk_update_calls_service(monkeypatch, extraction_app):
 
     async def fake_bulk(_session, **kwargs):
         captured.update(kwargs)
-        return {"succeeded": [str(i) for i in ids], "failed": []}
+        return BulkUpdateResponse(succeeded=ids, failed=[])
 
     monkeypatch.setattr(
         "app.api.extraction.get_project_for_user", fake_get_project_for_user

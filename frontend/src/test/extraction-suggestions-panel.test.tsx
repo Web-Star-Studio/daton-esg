@@ -120,9 +120,7 @@ describe('ExtractionSuggestionsPanel', () => {
   it('calls onAccept and onReject when buttons are clicked', async () => {
     const props = defaultProps()
     render(<ExtractionSuggestionsPanel {...props} />)
-    const acceptButtons = screen.getAllByRole('button', {
-      name: /Aceitar$|Substituir/,
-    })
+    const acceptButtons = screen.getAllByTestId('extraction-accept-suggestion')
     fireEvent.click(acceptButtons[0])
     await waitFor(() => {
       expect(props.onAccept).toHaveBeenCalledWith(materialitySuggestion)
@@ -148,9 +146,7 @@ describe('ExtractionSuggestionsPanel', () => {
     render(
       <ExtractionSuggestionsPanel {...defaultProps()} onAccept={onAccept} />
     )
-    const acceptButtons = screen.getAllByRole('button', {
-      name: /Aceitar$|Substituir/,
-    })
+    const acceptButtons = screen.getAllByTestId('extraction-accept-suggestion')
     fireEvent.click(acceptButtons[0])
 
     // Button on the active card is disabled until the handler resolves.
