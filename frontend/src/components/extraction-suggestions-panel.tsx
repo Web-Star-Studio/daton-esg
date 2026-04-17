@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import { getDocumentDirectoryLabel } from '../constants/document-directories'
@@ -147,13 +147,30 @@ function SuggestionCard({
   onReject,
 }: {
   suggestion: ExtractionSuggestion
-  onAccept: () => void
-  onReject: () => void
+  onAccept: () => void | Promise<void>
+  onReject: () => void | Promise<void>
 }) {
   const directoryLabel = suggestion.provenance[0]?.document_name
     ? (getDocumentDirectoryLabel(suggestion.provenance[0].document_name) ??
       null)
     : null
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  // Synchronous in-flight flag — useState alone doesn't protect against a
+  // double-click in the same render frame, since the closure captures the
+  // stale value before React re-renders.
+  const inFlightRef = useRef(false)
+
+  const guard = (handler: () => void | Promise<void>) => async () => {
+    if (inFlightRef.current) return
+    inFlightRef.current = true
+    setIsSubmitting(true)
+    try {
+      await handler()
+    } finally {
+      inFlightRef.current = false
+      setIsSubmitting(false)
+    }
+  }
 
   return (
     <article className="rounded-[12px] border border-black/8 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
@@ -174,8 +191,10 @@ function SuggestionCard({
         </div>
       ) : null}
       <footer className="mt-3 flex items-center justify-end gap-2">
-        <SecondaryBtn onClick={onReject}>Rejeitar</SecondaryBtn>
-        <PrimaryBtn onClick={onAccept}>
+        <SecondaryBtn onClick={guard(onReject)} disabled={isSubmitting}>
+          Rejeitar
+        </SecondaryBtn>
+        <PrimaryBtn onClick={guard(onAccept)} disabled={isSubmitting}>
           {suggestion.conflict_with_existing ? 'Substituir' : 'Aceitar'}
         </PrimaryBtn>
       </footer>
@@ -299,8 +318,8 @@ export function ExtractionSuggestionsPanel({
               <SuggestionCard
                 key={suggestion.id}
                 suggestion={suggestion}
-                onAccept={() => void onAccept(suggestion)}
-                onReject={() => void onReject(suggestion)}
+                onAccept={() => onAccept(suggestion)}
+                onReject={() => onReject(suggestion)}
               />
             ))
           )}

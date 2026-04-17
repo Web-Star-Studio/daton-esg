@@ -10,11 +10,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import SessionLocal, get_db_session
 from app.core.security import get_current_user
-from app.models import User
+from app.models import ExtractionSuggestion, User
 from app.models.enums import (
     ExtractionRunKind,
     ExtractionRunStatus,
@@ -107,14 +108,15 @@ async def stream_run(
             {"run_id": str(run.id), "kind": run.kind.value, "model": run.model_used},
         )
         async with SessionLocal() as fresh:
-            items, _ = await list_suggestions(
-                fresh,
-                project_id=project_id,
-                limit=1000,
+            result = await fresh.execute(
+                select(ExtractionSuggestion)
+                .where(
+                    ExtractionSuggestion.project_id == project_id,
+                    ExtractionSuggestion.run_id == run.id,
+                )
+                .order_by(ExtractionSuggestion.created_at.asc())
             )
-            for item in items:
-                if item.run_id != run.id:
-                    continue
+            for item in result.scalars():
                 yield sse_event(
                     "suggestion",
                     ExtractionSuggestionResponse.model_validate(item).model_dump(

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { ExtractionSuggestionsPanel } from '../components/extraction-suggestions-panel'
@@ -117,18 +117,55 @@ describe('ExtractionSuggestionsPanel', () => {
     ).toBeInTheDocument()
   })
 
-  it('calls onAccept and onReject when buttons are clicked', () => {
+  it('calls onAccept and onReject when buttons are clicked', async () => {
     const props = defaultProps()
     render(<ExtractionSuggestionsPanel {...props} />)
     const acceptButtons = screen.getAllByRole('button', {
       name: /Aceitar$|Substituir/,
     })
     fireEvent.click(acceptButtons[0])
-    expect(props.onAccept).toHaveBeenCalledWith(materialitySuggestion)
+    await waitFor(() => {
+      expect(props.onAccept).toHaveBeenCalledWith(materialitySuggestion)
+    })
 
+    // Reject the OTHER card (different suggestion). Each card has its own
+    // in-flight guard, so disabling on one card must not affect siblings.
     const rejectButtons = screen.getAllByRole('button', { name: 'Rejeitar' })
-    fireEvent.click(rejectButtons[0])
-    expect(props.onReject).toHaveBeenCalledWith(materialitySuggestion)
+    fireEvent.click(rejectButtons[1])
+    await waitFor(() => {
+      expect(props.onReject).toHaveBeenCalledWith(indicatorSuggestion)
+    })
+  })
+
+  it('disables the accept button on a card while its action is in flight (no double-click)', async () => {
+    let resolveAccept!: () => void
+    const onAccept = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveAccept = resolve
+        })
+    )
+    render(
+      <ExtractionSuggestionsPanel {...defaultProps()} onAccept={onAccept} />
+    )
+    const acceptButtons = screen.getAllByRole('button', {
+      name: /Aceitar$|Substituir/,
+    })
+    fireEvent.click(acceptButtons[0])
+
+    // Button on the active card is disabled until the handler resolves.
+    await waitFor(() => {
+      expect(acceptButtons[0]).toBeDisabled()
+    })
+
+    // A second click while disabled MUST NOT trigger another call.
+    fireEvent.click(acceptButtons[0])
+    expect(onAccept).toHaveBeenCalledTimes(1)
+
+    resolveAccept()
+    await waitFor(() => {
+      expect(acceptButtons[0]).not.toBeDisabled()
+    })
   })
 
   it('renders empty state when no suggestions', () => {
