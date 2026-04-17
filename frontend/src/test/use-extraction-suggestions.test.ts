@@ -11,10 +11,7 @@ import {
   updateExtractionSuggestion,
   type ExtractionStreamHandlers,
 } from '../services/api-client'
-import type {
-  ExtractionRun,
-  ExtractionSuggestion,
-} from '../types/extraction'
+import type { ExtractionRun, ExtractionSuggestion } from '../types/extraction'
 
 vi.mock('../services/api-client', () => ({
   bulkUpdateExtractionSuggestions: vi.fn(),
@@ -199,9 +196,7 @@ describe('useExtractionSuggestions', () => {
       items: [makeSuggestion('s1'), makeSuggestion('s2')],
       total: 2,
     })
-    mockUpdate.mockResolvedValue(
-      makeSuggestion('s1', { status: 'accepted' })
-    )
+    mockUpdate.mockResolvedValue(makeSuggestion('s1', { status: 'accepted' }))
 
     const { result } = renderHook(() =>
       useExtractionSuggestions('proj-1', { targetKind: 'material_topic' })
@@ -219,11 +214,7 @@ describe('useExtractionSuggestions', () => {
 
   it('bulkUpdate filters succeeded ids out of local list', async () => {
     mockList.mockResolvedValue({
-      items: [
-        makeSuggestion('s1'),
-        makeSuggestion('s2'),
-        makeSuggestion('s3'),
-      ],
+      items: [makeSuggestion('s1'), makeSuggestion('s2'), makeSuggestion('s3')],
       total: 3,
     })
     mockBulk.mockResolvedValue({ succeeded: ['s1', 's3'], failed: [] })

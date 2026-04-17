@@ -219,44 +219,55 @@ def _indicator_value_payload(s: IndicatorValueSuggestion) -> dict[str, Any]:
 async def _run_materiality(
     *,
     run_id: UUID,
-    project: Project,
+    project_id: UUID,
     settings: Settings,
-    session: AsyncSession,
     event_queue: EventQueue | None,
 ) -> int:
+    """Run the materiality extractor in its own DB session.
+
+    SQLAlchemy AsyncSession is not safe for concurrent use across tasks, so
+    each extractor opens its own session and re-loads the Project there.
+    """
     if event_queue is not None:
         await event_queue.put(("extractor_started", {"kind": "materiality"}))
 
-    extraction = await extract_materiality(session, project, settings)
     persisted = 0
+    async with SessionLocal() as session:
+        project = await session.get(Project, project_id)
+        if project is None:
+            return 0
 
-    for topic in extraction.material_topics:
-        row = await _persist_suggestion(
-            session,
-            run_id=run_id,
-            project=project,
-            target_kind=ExtractionTargetKind.MATERIAL_TOPIC,
-            payload=_material_topic_payload(topic),
-            confidence=topic.confidence,
-            provenance=_provenance_to_jsonable(topic.provenance),
-        )
-        persisted += 1
-        if event_queue is not None:
-            await event_queue.put(("suggestion", _suggestion_to_event(row)))
+        extraction = await extract_materiality(session, project, settings)
 
-    for sdg in extraction.sdg_goals:
-        row = await _persist_suggestion(
-            session,
-            run_id=run_id,
-            project=project,
-            target_kind=ExtractionTargetKind.SDG_GOAL,
-            payload=_sdg_payload(sdg),
-            confidence=sdg.confidence,
-            provenance=_provenance_to_jsonable(sdg.provenance),
-        )
-        persisted += 1
-        if event_queue is not None:
-            await event_queue.put(("suggestion", _suggestion_to_event(row)))
+        for topic in extraction.material_topics:
+            row = await _persist_suggestion(
+                session,
+                run_id=run_id,
+                project=project,
+                target_kind=ExtractionTargetKind.MATERIAL_TOPIC,
+                payload=_material_topic_payload(topic),
+                confidence=topic.confidence,
+                provenance=_provenance_to_jsonable(topic.provenance),
+            )
+            persisted += 1
+            if event_queue is not None:
+                await event_queue.put(("suggestion", _suggestion_to_event(row)))
+
+        for sdg in extraction.sdg_goals:
+            row = await _persist_suggestion(
+                session,
+                run_id=run_id,
+                project=project,
+                target_kind=ExtractionTargetKind.SDG_GOAL,
+                payload=_sdg_payload(sdg),
+                confidence=sdg.confidence,
+                provenance=_provenance_to_jsonable(sdg.provenance),
+            )
+            persisted += 1
+            if event_queue is not None:
+                await event_queue.put(("suggestion", _suggestion_to_event(row)))
+
+        await session.commit()
 
     if event_queue is not None:
         await event_queue.put(
@@ -268,53 +279,57 @@ async def _run_materiality(
 async def _run_indicators(
     *,
     run_id: UUID,
-    project: Project,
+    project_id: UUID,
     settings: Settings,
-    session: AsyncSession,
     event_queue: EventQueue | None,
 ) -> int:
     if event_queue is not None:
         await event_queue.put(("extractor_started", {"kind": "indicators"}))
 
-    extraction = await extract_indicators(session, project, settings)
     persisted = 0
+    async with SessionLocal() as session:
+        project = await session.get(Project, project_id)
+        if project is None:
+            return 0
 
-    for value in extraction.values:
-        payload = _indicator_value_payload(value)
-        notes: str | None = None
-        # Compute mismatch note against existing snapshot if conflict on (tema, indicador) only.
-        # The unidade-mismatch note is also useful; we tag it inline below.
+        extraction = await extract_indicators(session, project, settings)
+
         from app.models import IndicatorTemplate
 
-        template_unit = await session.execute(
-            select(IndicatorTemplate.unidade).where(
-                IndicatorTemplate.id == value.template_id
+        for value in extraction.values:
+            payload = _indicator_value_payload(value)
+            notes: str | None = None
+            template_unit = await session.execute(
+                select(IndicatorTemplate.unidade).where(
+                    IndicatorTemplate.id == value.template_id
+                )
             )
-        )
-        expected_unit = template_unit.scalar_one_or_none()
-        if (
-            expected_unit
-            and value.unidade
-            and value.unidade.strip() != expected_unit.strip()
-        ):
-            notes = (
-                f"unidade divergente: sugerido '{value.unidade}', "
-                f"esperado '{expected_unit}'"
-            )
+            expected_unit = template_unit.scalar_one_or_none()
+            if (
+                expected_unit
+                and value.unidade
+                and value.unidade.strip() != expected_unit.strip()
+            ):
+                notes = (
+                    f"unidade divergente: sugerido '{value.unidade}', "
+                    f"esperado '{expected_unit}'"
+                )
 
-        row = await _persist_suggestion(
-            session,
-            run_id=run_id,
-            project=project,
-            target_kind=ExtractionTargetKind.INDICATOR_VALUE,
-            payload=payload,
-            confidence=value.confidence,
-            provenance=_provenance_to_jsonable(value.provenance),
-            reviewer_notes=notes,
-        )
-        persisted += 1
-        if event_queue is not None:
-            await event_queue.put(("suggestion", _suggestion_to_event(row)))
+            row = await _persist_suggestion(
+                session,
+                run_id=run_id,
+                project=project,
+                target_kind=ExtractionTargetKind.INDICATOR_VALUE,
+                payload=payload,
+                confidence=value.confidence,
+                provenance=_provenance_to_jsonable(value.provenance),
+                reviewer_notes=notes,
+            )
+            persisted += 1
+            if event_queue is not None:
+                await event_queue.put(("suggestion", _suggestion_to_event(row)))
+
+        await session.commit()
 
     if event_queue is not None:
         await event_queue.put(
@@ -385,36 +400,44 @@ async def run_extraction(
                 )
             )
 
-        async def _wrap_materiality() -> int:
-            return await _run_materiality(
-                run_id=run.id,
-                project=project,
-                settings=current_settings,
-                session=session,
-                event_queue=event_queue,
-            )
-
-        async def _wrap_indicators() -> int:
-            return await _run_indicators(
-                run_id=run.id,
-                project=project,
-                settings=current_settings,
-                session=session,
-                event_queue=event_queue,
-            )
-
-        coros: list[Any] = []
+        # Sequential execution — each extractor opens its own SessionLocal so
+        # they never share an AsyncSession (which is not safe for concurrent
+        # access across tasks).
         labels: list[str] = []
+        coros: list[Any] = []
         if run.kind in (ExtractionRunKind.MATERIALITY, ExtractionRunKind.BOTH):
-            coros.append(_wrap_materiality())
             labels.append("materiality")
+            coros.append(
+                _run_materiality(
+                    run_id=run.id,
+                    project_id=project.id,
+                    settings=current_settings,
+                    event_queue=event_queue,
+                )
+            )
         if run.kind in (ExtractionRunKind.INDICATORS, ExtractionRunKind.BOTH):
-            coros.append(_wrap_indicators())
             labels.append("indicators")
+            coros.append(
+                _run_indicators(
+                    run_id=run.id,
+                    project_id=project.id,
+                    settings=current_settings,
+                    event_queue=event_queue,
+                )
+            )
+
+        async def _run_sequentially() -> list[Any]:
+            results_local: list[Any] = []
+            for coro in coros:
+                try:
+                    results_local.append(await coro)
+                except Exception as exc:  # noqa: BLE001 — captured per-extractor
+                    results_local.append(exc)
+            return results_local
 
         try:
             results: list[Any] = await asyncio.wait_for(
-                asyncio.gather(*coros, return_exceptions=True), timeout=timeout
+                _run_sequentially(), timeout=timeout
             )
         except asyncio.TimeoutError:
             logger.warning("extraction.run_timeout", extra={"run_id": str(run.id)})

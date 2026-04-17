@@ -6,6 +6,7 @@ import asyncio
 import logging
 from collections import defaultdict
 from collections.abc import Iterable
+from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
@@ -13,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.core.database import SessionLocal
 from app.models import IndicatorTemplate, Project
 from app.schemas.extraction import (
     IndicatorsExtraction,
@@ -99,21 +101,28 @@ async def _extract_one_tema(
     *,
     tema: str,
     templates: list[IndicatorTemplate],
-    session: AsyncSession,
-    project: Project,
+    project_id: Any,
+    project_name: str,
+    project_sector: str | None,
+    project_base_year: int,
     settings: Settings,
     semaphore: asyncio.Semaphore,
     valid_template_ids: set[int],
 ) -> list[IndicatorValueSuggestion]:
     query = _build_query_for_tema(tema, templates)
+    # Hold the semaphore across both the RAG retrieval AND the LLM call so the
+    # configured concurrency caps total in-flight OpenAI requests too. Each
+    # task opens its own AsyncSession because AsyncSession is not safe for
+    # concurrent use across tasks.
     async with semaphore:
         try:
-            chunks = await retrieve_project_context(
-                session,
-                project_id=project.id,
-                query=query,
-                top_k=settings.extraction_rag_top_k,
-            )
+            async with SessionLocal() as task_session:
+                chunks = await retrieve_project_context(
+                    task_session,
+                    project_id=project_id,
+                    query=query,
+                    top_k=settings.extraction_rag_top_k,
+                )
         except Exception:
             logger.exception(
                 "extraction.indicators.rag_failed",
@@ -121,41 +130,44 @@ async def _extract_one_tema(
             )
             return []
 
-    if not chunks:
-        return []
+        if not chunks:
+            return []
 
-    chunks_block = _format_chunks_for_prompt(chunks)
-    templates_block = _format_templates_for_prompt(templates)
-    user_prompt = (
-        "[CONTEXTO DA ORGANIZAÇÃO]\n"
-        f"Nome: {project.org_name}\n"
-        f"Setor: {project.org_sector or '—'}\n"
-        f"Ano-base: {project.base_year}\n\n"
-        f"[TEMA-ALVO] {tema}\n\n"
-        "[TEMPLATES DE INDICADORES (apenas estes podem ser preenchidos)]\n"
-        f"{templates_block}\n\n"
-        "[TRECHOS DOS DOCUMENTOS DA ORGANIZAÇÃO]\n"
-        f"{chunks_block}\n\n"
-        "Extraia valores numéricos para os templates listados quando houver "
-        "evidência direta nos trechos. Lembre: provenance é obrigatória; "
-        "template_id deve estar na lista."
-    )
-
-    llm = ChatOpenAI(
-        model=settings.extraction_model or settings.report_generation_model,
-        temperature=0.0,
-        max_completion_tokens=settings.report_generation_max_output_tokens,
-        api_key=settings.openai_api_key,
-    )
-    structured_llm = llm.with_structured_output(IndicatorsExtraction)
-
-    try:
-        response = await structured_llm.ainvoke(
-            [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=user_prompt)]
+        chunks_block = _format_chunks_for_prompt(chunks)
+        templates_block = _format_templates_for_prompt(templates)
+        user_prompt = (
+            "[CONTEXTO DA ORGANIZAÇÃO]\n"
+            f"Nome: {project_name}\n"
+            f"Setor: {project_sector or '—'}\n"
+            f"Ano-base: {project_base_year}\n\n"
+            f"[TEMA-ALVO] {tema}\n\n"
+            "[TEMPLATES DE INDICADORES (apenas estes podem ser preenchidos)]\n"
+            f"{templates_block}\n\n"
+            "[TRECHOS DOS DOCUMENTOS DA ORGANIZAÇÃO]\n"
+            f"{chunks_block}\n\n"
+            "Extraia valores numéricos para os templates listados quando houver "
+            "evidência direta nos trechos. Lembre: provenance é obrigatória; "
+            "template_id deve estar na lista."
         )
-    except Exception:
-        logger.exception("extraction.indicators.llm_failed", extra={"tema": tema})
-        return []
+
+        llm = ChatOpenAI(
+            model=settings.extraction_model or settings.report_generation_model,
+            temperature=0.0,
+            max_completion_tokens=settings.report_generation_max_output_tokens,
+            api_key=settings.openai_api_key,
+        )
+        structured_llm = llm.with_structured_output(IndicatorsExtraction)
+
+        try:
+            response = await structured_llm.ainvoke(
+                [
+                    SystemMessage(content=SYSTEM_PROMPT),
+                    HumanMessage(content=user_prompt),
+                ]
+            )
+        except Exception:
+            logger.exception("extraction.indicators.llm_failed", extra={"tema": tema})
+            return []
 
     if not isinstance(response, IndicatorsExtraction):
         logger.warning(
@@ -183,7 +195,12 @@ async def extract_indicators(
     project: Project,
     settings: Settings,
 ) -> IndicatorsExtraction:
-    """Run the indicators extraction. Returns suggestions (not yet persisted)."""
+    """Run the indicators extraction. Returns suggestions (not yet persisted).
+
+    The provided ``session`` is used only for sequential reads (loading the
+    template catalog); per-tema work runs concurrently in dedicated sessions
+    because AsyncSession is not safe for concurrent use across tasks.
+    """
     templates = await _load_input_templates(session)
     if not templates:
         logger.info("extraction.indicators.no_templates")
@@ -193,13 +210,22 @@ async def extract_indicators(
     valid_template_ids = {t.id for t in templates}
     semaphore = asyncio.Semaphore(settings.extraction_per_topic_concurrency)
 
+    # Snapshot the project fields the per-tema task needs, so the task body
+    # can run without touching the project instance attached to ``session``.
+    project_name = project.org_name
+    project_sector = project.org_sector
+    project_base_year = project.base_year
+    project_id = project.id
+
     tasks = [
         asyncio.create_task(
             _extract_one_tema(
                 tema=tema,
                 templates=tema_templates,
-                session=session,
-                project=project,
+                project_id=project_id,
+                project_name=project_name,
+                project_sector=project_sector,
+                project_base_year=project_base_year,
                 settings=settings,
                 semaphore=semaphore,
                 valid_template_ids=valid_template_ids,

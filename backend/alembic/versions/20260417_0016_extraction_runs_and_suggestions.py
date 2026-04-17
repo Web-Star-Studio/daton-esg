@@ -89,12 +89,8 @@ def upgrade() -> None:
             server_default=sa.func.now(),
         ),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["project_id"], ["projects.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["triggered_by"], ["users.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["project_id"], ["projects.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["triggered_by"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -148,15 +144,9 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.func.now(),
         ),
-        sa.ForeignKeyConstraint(
-            ["run_id"], ["extraction_runs.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["project_id"], ["projects.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["reviewed_by"], ["users.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["run_id"], ["extraction_runs.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["project_id"], ["projects.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["reviewed_by"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(

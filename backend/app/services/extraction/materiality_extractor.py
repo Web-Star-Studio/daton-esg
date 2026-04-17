@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.core.database import SessionLocal
 from app.models import GriStandard, Project
 from app.schemas.extraction import (
     MaterialityExtraction,
@@ -69,11 +70,14 @@ class MaterialityExtractionContext:
 
 
 async def _gather_chunks(
-    session: AsyncSession,
     project_id: Any,
     settings: Settings,
 ) -> list[RetrievedKnowledgeChunk]:
-    """Run all materiality queries × directories with bounded concurrency."""
+    """Run all materiality queries × directories with bounded concurrency.
+
+    Each concurrent task opens its own AsyncSession; sharing a session across
+    tasks is unsafe with SQLAlchemy's AsyncSession.
+    """
     semaphore = asyncio.Semaphore(settings.extraction_per_topic_concurrency)
 
     async def _one(
@@ -81,13 +85,14 @@ async def _gather_chunks(
     ) -> list[RetrievedKnowledgeChunk]:
         async with semaphore:
             try:
-                return await retrieve_project_context(
-                    session,
-                    project_id=project_id,
-                    query=query,
-                    top_k=settings.extraction_rag_top_k,
-                    directory_key=directory_key,
-                )
+                async with SessionLocal() as task_session:
+                    return await retrieve_project_context(
+                        task_session,
+                        project_id=project_id,
+                        query=query,
+                        top_k=settings.extraction_rag_top_k,
+                        directory_key=directory_key,
+                    )
             except Exception:
                 logger.exception(
                     "extraction.materiality.rag_failed",
@@ -154,8 +159,13 @@ async def extract_materiality(
     project: Project,
     settings: Settings,
 ) -> MaterialityExtraction:
-    """Run the materiality extraction. Returns suggestions (not yet persisted)."""
-    chunks = await _gather_chunks(session, project.id, settings)
+    """Run the materiality extraction. Returns suggestions (not yet persisted).
+
+    The provided ``session`` is used only for sequential reads (GRI codes set);
+    the parallel RAG retrievals open their own sessions because AsyncSession
+    is not safe for concurrent use.
+    """
+    chunks = await _gather_chunks(project.id, settings)
     if not chunks:
         logger.info(
             "extraction.materiality.no_chunks",

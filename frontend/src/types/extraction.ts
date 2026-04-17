@@ -1,10 +1,6 @@
 export type ExtractionRunKind = 'materiality' | 'indicators' | 'both'
 
-export type ExtractionRunStatus =
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'partial'
+export type ExtractionRunStatus = 'running' | 'completed' | 'failed' | 'partial'
 
 export type ExtractionTargetKind =
   | 'material_topic'
@@ -104,7 +100,10 @@ export type ExtractionStreamEventType =
   | 'error'
 
 export type ExtractionStreamEvent =
-  | { type: 'run_started'; data: { run_id: string; kind: ExtractionRunKind; model: string | null } }
+  | {
+      type: 'run_started'
+      data: { run_id: string; kind: ExtractionRunKind; model: string | null }
+    }
   | {
       type: 'extractor_started'
       data: { kind: 'materiality' | 'indicators' }
@@ -116,7 +115,11 @@ export type ExtractionStreamEvent =
     }
   | {
       type: 'run_completed'
-      data: { run_id: string; status: ExtractionRunStatus; summary: Record<string, unknown> | null }
+      data: {
+        run_id: string
+        status: ExtractionRunStatus
+        summary: Record<string, unknown> | null
+      }
     }
   | { type: 'error'; data: { message: string; extractor?: string } }
 

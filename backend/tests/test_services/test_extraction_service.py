@@ -12,11 +12,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
-import pytest
-
 from app.models import Project
 from app.models.enums import (
-    ExtractionConfidence,
     ExtractionTargetKind,
     ProjectStatus,
 )
@@ -202,9 +199,7 @@ def test_apply_indicator_value_replaces_only_same_unit() -> None:
 
 def test_apply_sdg_replaces_when_number_matches() -> None:
     project = make_project()
-    project.sdg_goals = [
-        {"ods_number": 7, "objetivo": "Antigo", "acao": "x"}
-    ]
+    project.sdg_goals = [{"ods_number": 7, "objetivo": "Antigo", "acao": "x"}]
     _project_apply_sdg(
         project,
         {"ods_number": 7, "objetivo": "Energia limpa e acessível", "acao": ""},

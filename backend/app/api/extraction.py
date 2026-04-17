@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import SessionLocal, get_db_session
 from app.core.security import get_current_user
-from app.models import ExtractionRun, User
+from app.models import User
 from app.models.enums import (
     ExtractionRunKind,
     ExtractionRunStatus,
@@ -31,11 +31,11 @@ from app.schemas.extraction import (
 )
 from app.services.extraction.orchestrator import run_extraction
 from app.services.extraction_service import (
-    _track_task,
     apply_suggestion,
     bulk_apply,
     get_run,
     list_suggestions,
+    start_extraction_run,
 )
 from app.services.project_service import get_project_for_user
 from app.services.sse_utils import sse_event
@@ -57,22 +57,17 @@ async def start_run(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> ExtractionRunResponse:
+    """Persist a new run row. The orchestrator is started by GET /stream so
+    that exactly one producer exists per run (the client is expected to open
+    the stream immediately after this 202)."""
     project = await get_project_for_user(session, project_id, current_user.id)
     kind = (payload.kind if payload else None) or ExtractionRunKind.BOTH
-
-    run = ExtractionRun(
-        project_id=project.id,
+    run = await start_extraction_run(
+        session,
+        project=project,
         kind=kind,
-        status=ExtractionRunStatus.RUNNING,
-        triggered_by=current_user.id,
+        user_id=current_user.id,
     )
-    session.add(run)
-    await session.commit()
-    await session.refresh(run)
-
-    task = asyncio.create_task(run_extraction(run.id))
-    _track_task(task)
-
     return ExtractionRunResponse.model_validate(run)
 
 

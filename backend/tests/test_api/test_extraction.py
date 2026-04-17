@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
@@ -20,7 +20,6 @@ from app.main import create_app
 from app.models import ExtractionRun, ExtractionSuggestion, Project, User
 from app.models.enums import (
     ExtractionConfidence,
-    ExtractionRunKind,
     ExtractionRunStatus,
     ExtractionSuggestionStatus,
     ExtractionTargetKind,
@@ -78,50 +77,37 @@ def extraction_app():
     app.dependency_overrides.clear()
 
 
-def test_start_run_creates_row_and_schedules_task(monkeypatch, extraction_app):
-    app, session, user = extraction_app
+def test_start_run_persists_row_via_service(monkeypatch, extraction_app):
+    """POST /runs only persists the run row. The orchestrator is launched by
+    GET /stream, so this endpoint MUST NOT spawn a background task."""
+    app, _session, user = extraction_app
     project = make_project(user)
-    captured_run: dict[str, object] = {}
 
     async def fake_get_project_for_user(_session, _project_id, _user_id):
         assert _project_id == project.id
         return project
 
-    async def fake_session_add(*args, **kwargs):
-        return None
+    captured: dict[str, object] = {}
+
+    async def fake_start_extraction_run(_session, *, project, kind, user_id):
+        captured["project_id"] = project.id
+        captured["kind"] = kind
+        captured["user_id"] = user_id
+        return ExtractionRun(
+            id=uuid4(),
+            project_id=project.id,
+            kind=kind,
+            status=ExtractionRunStatus.RUNNING,
+            triggered_by=user_id,
+            started_at=datetime.now(timezone.utc),
+        )
 
     monkeypatch.setattr(
         "app.api.extraction.get_project_for_user", fake_get_project_for_user
     )
-
-    # Patch session.add to capture the run, and commit/refresh to set fields.
-    def fake_add(obj):
-        if isinstance(obj, ExtractionRun):
-            obj.id = uuid4()
-            obj.started_at = datetime.now(timezone.utc)
-            captured_run["run"] = obj
-
-    async def fake_commit():
-        return None
-
-    async def fake_refresh(obj):
-        return None
-
-    session.add = fake_add  # type: ignore[attr-defined]
-    session.commit = fake_commit  # type: ignore[attr-defined]
-    session.refresh = fake_refresh  # type: ignore[attr-defined]
-
-    scheduled = {}
-
-    def fake_create_task(coro):
-        scheduled["called"] = True
-        coro.close()
-        task = MagicMock()
-        task.add_done_callback = MagicMock()
-        return task
-
-    monkeypatch.setattr("app.api.extraction.asyncio.create_task", fake_create_task)
-    monkeypatch.setattr("app.api.extraction._track_task", lambda task: None)
+    monkeypatch.setattr(
+        "app.api.extraction.start_extraction_run", fake_start_extraction_run
+    )
 
     with TestClient(app) as client:
         resp = client.post(
@@ -133,8 +119,8 @@ def test_start_run_creates_row_and_schedules_task(monkeypatch, extraction_app):
     payload = resp.json()
     assert payload["kind"] == "materiality"
     assert payload["status"] == "running"
-    assert scheduled.get("called") is True
-    assert isinstance(captured_run.get("run"), ExtractionRun)
+    assert captured["kind"].value == "materiality"
+    assert captured["user_id"] == user.id
 
 
 def test_list_suggestions_returns_paginated_payload(monkeypatch, extraction_app):

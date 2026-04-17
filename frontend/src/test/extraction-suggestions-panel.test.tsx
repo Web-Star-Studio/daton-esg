@@ -2,9 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { ExtractionSuggestionsPanel } from '../components/extraction-suggestions-panel'
-import type {
-  ExtractionSuggestion,
-} from '../types/extraction'
+import type { ExtractionSuggestion } from '../types/extraction'
 
 const materialitySuggestion: ExtractionSuggestion = {
   id: 'sug-1',
@@ -87,9 +85,13 @@ function defaultProps() {
 describe('ExtractionSuggestionsPanel', () => {
   it('renders pending suggestions with confidence badge', () => {
     render(<ExtractionSuggestionsPanel {...defaultProps()} />)
-    expect(screen.getByText(/2 sugestão\(ões\) para revisar/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/2 sugestão\(ões\) para revisar/)
+    ).toBeInTheDocument()
     expect(screen.getByText('[E] GRI 305-1')).toBeInTheDocument()
-    expect(screen.getByText('Energia consumida — renovável')).toBeInTheDocument()
+    expect(
+      screen.getByText('Energia consumida — renovável')
+    ).toBeInTheDocument()
     expect(screen.getAllByText(/Alta|Média/).length).toBeGreaterThan(0)
   })
 
@@ -107,9 +109,7 @@ describe('ExtractionSuggestionsPanel', () => {
       screen.getByText('Conflito com valor já preenchido')
     ).toBeInTheDocument()
     expect(
-      screen.getByText(
-        /unidade divergente: sugerido kWh, esperado kWh\/ano/i
-      )
+      screen.getByText(/unidade divergente: sugerido kWh, esperado kWh\/ano/i)
     ).toBeInTheDocument()
     // The conflict suggestion uses 'Substituir' instead of 'Aceitar'
     expect(

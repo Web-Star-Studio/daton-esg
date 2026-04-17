@@ -489,7 +489,8 @@ export function ProjectIndicatorsPage() {
   const handleAcceptAll = useCallback(
     async (ids: string[]) => {
       const result = await extraction.bulkUpdate({ ids, action: 'accept_all' })
-      if (result && result.succeeded.length > 0) await refreshProjectAfterApply()
+      if (result && result.succeeded.length > 0)
+        await refreshProjectAfterApply()
     },
     [extraction, refreshProjectAfterApply]
   )

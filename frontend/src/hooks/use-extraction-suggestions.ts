@@ -88,6 +88,10 @@ export function useExtractionSuggestions(
         error: err instanceof Error ? err.message : String(err),
       }))
     }
+    // targetKindKey is the stable serialization of the filter; the callback
+    // reads the live filter value via targetKindRef. We list targetKindKey
+    // here so a filter change re-fires the load effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, targetKindKey])
 
   useEffect(() => {
@@ -191,9 +195,7 @@ export function useExtractionSuggestions(
         const succeededIds = new Set(result.succeeded)
         setState((prev) => ({
           ...prev,
-          suggestions: prev.suggestions.filter(
-            (s) => !succeededIds.has(s.id)
-          ),
+          suggestions: prev.suggestions.filter((s) => !succeededIds.has(s.id)),
         }))
         return result
       } catch (err) {

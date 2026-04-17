@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import { getDocumentDirectoryLabel } from '../constants/document-directories'
+import { IconBtn } from './icon-btn'
 import { PrimaryBtn } from './primary-btn'
 import { SecondaryBtn } from './secondary-btn'
 import type {
@@ -112,7 +113,10 @@ function ProvenanceList({ suggestion }: { suggestion: ExtractionSuggestion }) {
         >
           <div className="text-[#1d1d1f]">
             <span className="font-medium">{item.document_name}</span>
-            <span className="text-[#9b9ba1]"> · trecho #{item.chunk_index}</span>
+            <span className="text-[#9b9ba1]">
+              {' '}
+              · trecho #{item.chunk_index}
+            </span>
           </div>
           {item.excerpt ? (
             <div className="mt-0.5 italic text-[#6b6b72]">"{item.excerpt}"</div>
@@ -147,7 +151,8 @@ function SuggestionCard({
   onReject: () => void
 }) {
   const directoryLabel = suggestion.provenance[0]?.document_name
-    ? getDocumentDirectoryLabel(suggestion.provenance[0].document_name) ?? null
+    ? (getDocumentDirectoryLabel(suggestion.provenance[0].document_name) ??
+      null)
     : null
 
   return (
@@ -242,16 +247,11 @@ export function ExtractionSuggestionsPanel({
                   : 'Nenhuma sugestão pendente'}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fechar painel de sugestões"
-            className="apple-focus-ring rounded-md p-1 text-[#6b6b72] hover:bg-black/5"
-          >
+          <IconBtn onClick={onClose} aria-label="Fechar painel de sugestões">
             <span className="material-symbols-outlined text-[18px]" aria-hidden>
               close
             </span>
-          </button>
+          </IconBtn>
         </header>
 
         <div className="flex items-center gap-2 border-b border-black/6 bg-white px-4 py-2">

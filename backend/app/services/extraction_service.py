@@ -17,7 +17,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -28,17 +28,18 @@ from app.models.enums import (
     ExtractionSuggestionStatus,
     ExtractionTargetKind,
 )
-from app.services.extraction.orchestrator import run_extraction
 
 logger = logging.getLogger(__name__)
 
 
 # Strong references to background tasks — without this, asyncio may garbage-collect
-# them before they finish. Mirrors FastAPI's recommended pattern for fire-and-forget tasks.
+# them before they finish. Mirrors FastAPI's recommended pattern for
+# fire-and-forget tasks.
 _BACKGROUND_TASKS: set[asyncio.Task[Any]] = set()
 
 
 def _track_task(task: asyncio.Task[Any]) -> None:
+    """Pin a background task so it can't be GC'd before it finishes."""
     _BACKGROUND_TASKS.add(task)
     task.add_done_callback(_BACKGROUND_TASKS.discard)
 
@@ -50,7 +51,12 @@ async def start_extraction_run(
     kind: ExtractionRunKind,
     user_id: UUID | None,
 ) -> ExtractionRun:
-    """Create a run row and schedule the background orchestrator."""
+    """Create a run row in ``running`` state.
+
+    The orchestrator itself is launched by ``GET /runs/{id}/stream`` so that
+    there is exactly one producer per run. ``_track_task`` is still exposed
+    for callers that need to schedule background work directly.
+    """
     run = ExtractionRun(
         project_id=project.id,
         kind=kind,
@@ -60,9 +66,6 @@ async def start_extraction_run(
     session.add(run)
     await session.commit()
     await session.refresh(run)
-
-    task = asyncio.create_task(run_extraction(run.id))
-    _track_task(task)
     return run
 
 
@@ -92,27 +95,26 @@ async def list_suggestions(
     limit: int = 200,
     offset: int = 0,
 ) -> tuple[list[ExtractionSuggestion], int]:
-    base = select(ExtractionSuggestion).where(
-        ExtractionSuggestion.project_id == project_id
-    )
+    where_clauses = [ExtractionSuggestion.project_id == project_id]
     if status_filter is not None:
-        base = base.where(ExtractionSuggestion.status == status_filter)
+        where_clauses.append(ExtractionSuggestion.status == status_filter)
     if target_kind is not None:
-        base = base.where(ExtractionSuggestion.target_kind == target_kind)
+        where_clauses.append(ExtractionSuggestion.target_kind == target_kind)
 
-    rows = await session.execute(
-        base.order_by(ExtractionSuggestion.created_at.desc())
+    rows_stmt = (
+        select(ExtractionSuggestion)
+        .where(*where_clauses)
+        .order_by(ExtractionSuggestion.created_at.desc())
         .limit(limit)
         .offset(offset)
     )
+    rows = await session.execute(rows_stmt)
     items = list(rows.scalars())
 
-    count_q = await session.execute(
-        select(ExtractionSuggestion.id).where(
-            ExtractionSuggestion.project_id == project_id,
-        )
+    count_stmt = (
+        select(func.count()).select_from(ExtractionSuggestion).where(*where_clauses)
     )
-    total = len(count_q.all())
+    total = (await session.execute(count_stmt)).scalar_one()
     return items, total
 
 

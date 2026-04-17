@@ -942,8 +942,7 @@ export async function listExtractionSuggestions(
   if (filters?.status) query.set('status', filters.status)
   if (filters?.kind) query.set('kind', filters.kind)
   if (filters?.limit !== undefined) query.set('limit', String(filters.limit))
-  if (filters?.offset !== undefined)
-    query.set('offset', String(filters.offset))
+  if (filters?.offset !== undefined) query.set('offset', String(filters.offset))
 
   const suffix = query.size > 0 ? `?${query.toString()}` : ''
   const response = await apiFetch(
@@ -1045,7 +1044,7 @@ function processExtractionSseChunk(
     handlers.onCompleted?.(data as ExtractionStreamEvent['data'])
   } else if (event === 'error') {
     handlers.onError?.(
-      ((data as { message?: string }).message ?? 'Erro durante a extração.')
+      (data as { message?: string }).message ?? 'Erro durante a extração.'
     )
   }
 }
