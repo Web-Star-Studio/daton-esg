@@ -313,6 +313,15 @@ async def bulk_apply(
     action: str,
     user_id: UUID | None,
 ) -> dict[str, Any]:
+    """Apply ``action`` to each suggestion id, best-effort.
+
+    Note: this delegates to ``apply_suggestion`` per item, and that function
+    commits the request-scoped ``AsyncSession`` after each successful apply.
+    Failures on later items therefore do NOT roll back earlier successes —
+    the response shape (``succeeded``/``failed``) reports partial outcomes
+    so the client can handle them. The session is committed multiple times
+    during a single request by design.
+    """
     if action not in {"accept_all", "reject_all"}:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid bulk action"

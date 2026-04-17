@@ -22,6 +22,7 @@ from app.models import (
     Document,
     ExtractionRun,
     ExtractionSuggestion,
+    IndicatorTemplate,
     Project,
 )
 from app.models.enums import (
@@ -294,17 +295,24 @@ async def _run_indicators(
 
         extraction = await extract_indicators(session, project, settings)
 
-        from app.models import IndicatorTemplate
+        # Batch-load expected units for all referenced templates in one query
+        # (avoids N+1 over extraction.values).
+        template_ids = {value.template_id for value in extraction.values}
+        expected_units: dict[int, str] = {}
+        if template_ids:
+            unit_rows = await session.execute(
+                select(IndicatorTemplate.id, IndicatorTemplate.unidade).where(
+                    IndicatorTemplate.id.in_(template_ids)
+                )
+            )
+            expected_units = {
+                row[0]: row[1] for row in unit_rows.all() if row[1] is not None
+            }
 
         for value in extraction.values:
             payload = _indicator_value_payload(value)
             notes: str | None = None
-            template_unit = await session.execute(
-                select(IndicatorTemplate.unidade).where(
-                    IndicatorTemplate.id == value.template_id
-                )
-            )
-            expected_unit = template_unit.scalar_one_or_none()
+            expected_unit = expected_units.get(value.template_id)
             if (
                 expected_unit
                 and value.unidade
@@ -443,11 +451,21 @@ async def run_extraction(
             logger.warning("extraction.run_timeout", extra={"run_id": str(run.id)})
             run.status = ExtractionRunStatus.FAILED
             run.error = f"timeout after {timeout}s"
+            run.summary_stats = {"error": run.error}
             run.completed_at = datetime.now(timezone.utc)
             await session.commit()
             if event_queue is not None:
                 await event_queue.put(("error", {"message": run.error}))
-                await event_queue.put(("run_completed", {"status": run.status.value}))
+                await event_queue.put(
+                    (
+                        "run_completed",
+                        {
+                            "run_id": str(run.id),
+                            "status": run.status.value,
+                            "summary": run.summary_stats,
+                        },
+                    )
+                )
                 await event_queue.put(None)
             return
 

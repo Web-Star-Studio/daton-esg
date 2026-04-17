@@ -147,8 +147,16 @@ async def stream_run(
                 producer.cancel()
                 try:
                     await producer
-                except (asyncio.CancelledError, Exception):
+                except asyncio.CancelledError:
+                    # Expected when the client disconnected and we cancelled.
                     pass
+                except Exception:
+                    # Real producer failure (DB commit, LLM, etc.) — log so
+                    # it isn't silently swallowed by the cancellation handler.
+                    logger.exception(
+                        "extraction.producer_failed",
+                        extra={"run_id": str(run.id)},
+                    )
 
     if run.status in {
         ExtractionRunStatus.COMPLETED,
