@@ -8,11 +8,11 @@ from app.models.enums import OrganizationSize, ProjectStatus
 
 
 class MaterialTopic(BaseModel):
-    """Material topic with ESG pillar and priority."""
+    """GRI disclosure selection with environmental/social pillar and priority."""
 
-    pillar: Literal["E", "S", "G"]
+    pillar: Literal["E", "S"]
     topic: str = Field(min_length=1, max_length=255)
-    priority: int = Field(ge=1, le=5)
+    priority: Literal["alta", "media", "baixa"]
 
     @field_validator("topic")
     @classmethod

@@ -141,10 +141,7 @@ export function LoginPage() {
 
         <div className="w-full max-w-[380px] bg-transparent">
           <div className="mb-10 text-center md:text-left">
-            <p className="text-[14px] font-semibold uppercase leading-[1.29] tracking-[-0.224px] text-black/60">
-              {isNewPasswordStep ? 'Nova senha' : 'Login'}
-            </p>
-            <h2 className="mt-4 [font-family:'SF_Pro_Display','SF_Pro_Icons','Helvetica_Neue',Helvetica,Arial,sans-serif] text-[32px] font-semibold leading-[1.1] tracking-[-0.01em] text-[#1d1d1f]">
+            <h2 className="[font-family:'SF_Pro_Display','SF_Pro_Icons','Helvetica_Neue',Helvetica,Arial,sans-serif] text-[32px] font-semibold leading-[1.1] tracking-[-0.01em] text-[#1d1d1f]">
               {isNewPasswordStep ? 'Defina sua nova senha' : 'Acesse sua conta'}
             </h2>
           </div>

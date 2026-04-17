@@ -25,7 +25,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
-from app.models import GriStandard, Project, Report
+from app.models import GriStandard, IndicatorTemplate, Project, Report
 from app.models.enums import ReportStatus
 from app.schemas.knowledge import FrameworkReferenceChunk, RetrievedKnowledgeChunk
 from app.services.prompts import PROMPT_MESTRE
@@ -171,6 +171,7 @@ class ReportGraphState(TypedDict, total=False):
     material_topics: list[dict[str, Any]]
     sdg_goals: list[dict[str, Any]]
     project_indicators: Any
+    indicator_templates: list[dict[str, Any]]
 
     # Pipeline progress
     current_section_index: int
@@ -195,15 +196,21 @@ class ReportGraphState(TypedDict, total=False):
 # ------------------------------- helpers -----------------------------------
 
 
-def _format_material_topics(topics: list[dict[str, Any]] | None) -> str:
+def _format_material_topics(
+    topics: list[dict[str, Any]] | None,
+    gri_definitions: dict[str, str] | None = None,
+) -> str:
     if not topics:
         return "Nenhum tema material selecionado explicitamente pelo consultor."
+    defs = gri_definitions or {}
     lines: list[str] = []
     for topic in topics:
         pillar = topic.get("pillar", "?")
-        name = topic.get("topic", "?")
+        code = topic.get("topic", "?")
         priority = topic.get("priority", "?")
-        lines.append(f"- [{pillar}] {name} (prioridade {priority}/5)")
+        title = defs.get(str(code), "").strip()
+        suffix = f" — {title}" if title else ""
+        lines.append(f"- [{pillar}] {code}{suffix} (prioridade {priority})")
     return "\n".join(lines)
 
 
@@ -227,33 +234,214 @@ def _format_sdg_goals(goals: list[dict[str, Any]] | None) -> str:
     return "\n".join(lines)
 
 
-def _format_indicators(indicators: Any) -> str:
+_PT_BR_THOUSANDS_RE = re.compile(r"^\d{1,3}(?:\.\d{3})+$")
+
+
+def _coerce_number(value: Any) -> float | None:
+    """Parse a pt-BR or plain decimal string into a float (None on failure)."""
+    if value is None:
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    text = str(value).strip()
+    if not text:
+        return None
+    if "," in text:
+        text = text.replace(".", "").replace(",", ".")
+    elif _PT_BR_THOUSANDS_RE.match(text):
+        # pt-BR thousands-only integer (e.g. "1.000" → 1000, "2.500.000" → 2500000).
+        text = text.replace(".", "")
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def _format_indicators(
+    indicators: Any,
+    templates: list[dict[str, Any]] | None = None,
+) -> str:
+    """Render project indicator values for the LLM prompt.
+
+    When `templates` is provided, the output is enriched with GRI codes and
+    sibling inputs sharing a `group_key` are rendered together, followed by a
+    derived total/percentage for any `computed_*` row in the group.
+
+    When `templates` is missing (legacy callers), falls back to a flat
+    `[tema] name: value unit` listing.
+    """
     if not indicators:
         return "Nenhum indicador quantitativo registrado pelo consultor."
-    if isinstance(indicators, list):
+
+    if not isinstance(indicators, list):
+        if isinstance(indicators, dict):
+            items = list(indicators.items())
+            return "\n".join(
+                f"- {key}: {value}" for key, value in items if value not in (None, "")
+            )
+        return str(indicators)
+
+    values_by_indicador: dict[str, dict[str, Any]] = {}
+    for item in indicators:
+        if isinstance(item, dict):
+            key = item.get("indicador")
+            if key:
+                values_by_indicador[str(key)] = item
+
+    if not values_by_indicador:
+        return "Nenhum indicador quantitativo registrado pelo consultor."
+
+    tpls = templates or []
+
+    # Fallback flat output when we have no catalog metadata.
+    if not tpls:
         lines: list[str] = []
-        for item in indicators:
-            if isinstance(item, dict):
-                name = item.get("indicador", "")
-                value = item.get("value", "")
-                unit = item.get("unidade", "")
-                tema = item.get("tema", "")
-                if value:
-                    prefix = f"[{tema}] " if tema else ""
-                    lines.append(f"- {prefix}{name}: {value} {unit}".strip())
-            else:
-                lines.append(f"- {item}")
+        for item in values_by_indicador.values():
+            name = item.get("indicador", "")
+            value = item.get("value", "")
+            unit = item.get("unidade", "")
+            tema = item.get("tema", "")
+            if value:
+                prefix = f"[{tema}] " if tema else ""
+                lines.append(f"- {prefix}{name}: {value} {unit}".strip())
         return (
             "\n".join(lines)
             if lines
             else "Nenhum indicador quantitativo registrado pelo consultor."
         )
-    if isinstance(indicators, dict):
-        items = list(indicators.items())
-        return "\n".join(
-            f"- {key}: {value}" for key, value in items if value not in (None, "")
+
+    def _sort_key(t: dict[str, Any]) -> tuple[str, int, str]:
+        return (
+            str(t.get("tema", "")),
+            int(t.get("display_order", 0) or 0),
+            str(t.get("indicador", "")),
         )
-    return str(indicators)
+
+    sorted_tpls = sorted(tpls, key=_sort_key)
+
+    # Group by tema, preserving order; within each tema iterate templates and
+    # collapse runs of same `group_key`.
+    temas: list[tuple[str, list[dict[str, Any]]]] = []
+    for tpl in sorted_tpls:
+        tema = str(tpl.get("tema", ""))
+        if not temas or temas[-1][0] != tema:
+            temas.append((tema, []))
+        temas[-1][1].append(tpl)
+
+    out_lines: list[str] = []
+    for tema, tpls_in_tema in temas:
+        rendered_tema_header = False
+        i = 0
+        while i < len(tpls_in_tema):
+            tpl = tpls_in_tema[i]
+            group_key = tpl.get("group_key")
+            if not group_key:
+                value_row = values_by_indicador.get(str(tpl.get("indicador", "")))
+                if value_row and value_row.get("value") not in (None, ""):
+                    if not rendered_tema_header:
+                        out_lines.append(f"[{tema}]")
+                        rendered_tema_header = True
+                    out_lines.append(
+                        _format_indicator_line(tpl, value_row.get("value"))
+                    )
+                i += 1
+                continue
+
+            # Collect the whole group (contiguous run in display_order).
+            group_tpls: list[dict[str, Any]] = []
+            while (
+                i < len(tpls_in_tema) and tpls_in_tema[i].get("group_key") == group_key
+            ):
+                group_tpls.append(tpls_in_tema[i])
+                i += 1
+
+            group_lines = _format_indicator_group(group_tpls, values_by_indicador)
+            if group_lines:
+                if not rendered_tema_header:
+                    out_lines.append(f"[{tema}]")
+                    rendered_tema_header = True
+                out_lines.extend(group_lines)
+
+    return (
+        "\n".join(out_lines)
+        if out_lines
+        else "Nenhum indicador quantitativo registrado pelo consultor."
+    )
+
+
+def _format_indicator_line(tpl: dict[str, Any], value: Any) -> str:
+    name = str(tpl.get("indicador", "")).strip()
+    unit = str(tpl.get("unidade", "")).strip()
+    gri_code = str(tpl.get("gri_code") or "").strip()
+    suffix = f" ({gri_code})" if gri_code else ""
+    unit_suffix = f" {unit}" if unit else ""
+    return f"- {name}{suffix}: {value}{unit_suffix}".rstrip()
+
+
+def _format_indicator_line_computed(tpl: dict[str, Any], derived_value: float) -> str:
+    name = str(tpl.get("indicador", "")).strip()
+    unit = str(tpl.get("unidade", "")).strip()
+    gri_code = str(tpl.get("gri_code") or "").strip()
+    suffix_bits = ["computado"]
+    if gri_code:
+        suffix_bits.append(gri_code)
+    suffix = f" ({', '.join(suffix_bits)})"
+    unit_suffix = f" {unit}" if unit else ""
+    # Format number: strip trailing zeros for cleanliness
+    formatted = f"{derived_value:.2f}".rstrip("0").rstrip(".") if derived_value else "0"
+    return f"- {name}{suffix}: {formatted}{unit_suffix}".rstrip()
+
+
+def _format_indicator_group(
+    group_tpls: list[dict[str, Any]],
+    values_by_indicador: dict[str, dict[str, Any]],
+) -> list[str]:
+    """Render one `group_key` block: input rows first, then derived rows.
+
+    Only emit anything if at least one input row has a value.
+    """
+    input_tpls = [t for t in group_tpls if t.get("kind", "input") == "input"]
+    computed_tpls = [t for t in group_tpls if t.get("kind", "input") != "input"]
+
+    # Convention (must match frontend `computeDerivedValue`): the numerator for
+    # `computed_pct` is the first input in display_order, regardless of whether
+    # sibling inputs are empty. Pre-compute it separately from the running
+    # sum so an empty first-by-order input cannot be silently replaced by a
+    # later sibling's value.
+    first_input_value: float | None = None
+    if input_tpls:
+        first_row = values_by_indicador.get(str(input_tpls[0].get("indicador", "")))
+        first_raw = first_row.get("value") if first_row else None
+        if first_raw not in (None, ""):
+            first_input_value = _coerce_number(first_raw)
+
+    input_lines: list[str] = []
+    input_numbers: list[float] = []
+    for tpl in input_tpls:
+        value_row = values_by_indicador.get(str(tpl.get("indicador", "")))
+        raw_value = value_row.get("value") if value_row else None
+        if raw_value in (None, ""):
+            continue
+        input_lines.append(_format_indicator_line(tpl, raw_value))
+        number = _coerce_number(raw_value)
+        if number is not None:
+            input_numbers.append(number)
+
+    if not input_lines:
+        return []
+
+    out = list(input_lines)
+    total = sum(input_numbers) if input_numbers else None
+
+    for tpl in computed_tpls:
+        kind = tpl.get("kind")
+        if kind == "computed_sum" and total is not None:
+            out.append(_format_indicator_line_computed(tpl, total))
+        elif kind == "computed_pct" and total and first_input_value is not None:
+            out.append(
+                _format_indicator_line_computed(tpl, (first_input_value / total) * 100)
+            )
+    return out
 
 
 def _format_project_chunks(chunks: list[RetrievedKnowledgeChunk]) -> str:
@@ -357,9 +545,12 @@ def _build_user_prompt(state: ReportGraphState) -> str:
             f"Ano-base: {project.base_year}\n"
             f"Escopo: {scope}"
         ),
-        f"[TEMAS MATERIAIS]\n{_format_material_topics(topics)}",
+        f"[TEMAS MATERIAIS]\n{_format_material_topics(topics, gri_definitions)}",
         f"[ODS PRIORITÁRIOS]\n{_format_sdg_goals(sdgs)}",
-        f"[INDICADORES DISPONÍVEIS]\n{_format_indicators(state.get('project_indicators'))}",
+        (
+            "[INDICADORES DISPONÍVEIS]\n"
+            f"{_format_indicators(state.get('project_indicators'), state.get('indicator_templates'))}"
+        ),
         (f"[EVIDÊNCIAS DA ORGANIZAÇÃO]\n{_format_project_chunks(chunks)}"),
         (
             "[CONTEXTO TÉCNICO GRI — referência conceitual, NÃO é evidência]\n"
@@ -485,6 +676,34 @@ async def load_project_context(state: ReportGraphState) -> dict[str, Any]:
     sdgs_raw = project.sdg_goals
     sdgs = sdgs_raw if isinstance(sdgs_raw, list) else []
 
+    templates_result = await session.execute(
+        select(
+            IndicatorTemplate.tema,
+            IndicatorTemplate.indicador,
+            IndicatorTemplate.unidade,
+            IndicatorTemplate.gri_code,
+            IndicatorTemplate.group_key,
+            IndicatorTemplate.kind,
+            IndicatorTemplate.display_order,
+        ).order_by(
+            IndicatorTemplate.tema,
+            IndicatorTemplate.display_order,
+            IndicatorTemplate.indicador,
+        )
+    )
+    indicator_templates = [
+        {
+            "tema": row.tema,
+            "indicador": row.indicador,
+            "unidade": row.unidade,
+            "gri_code": row.gri_code,
+            "group_key": row.group_key,
+            "kind": row.kind,
+            "display_order": row.display_order,
+        }
+        for row in templates_result.all()
+    ]
+
     return {
         "section_templates": list(REPORT_SECTIONS),
         "valid_gri_codes": valid_codes,
@@ -492,6 +711,7 @@ async def load_project_context(state: ReportGraphState) -> dict[str, Any]:
         "material_topics": topics,
         "sdg_goals": sdgs,
         "project_indicators": project.indicator_values,
+        "indicator_templates": indicator_templates,
         "current_section_index": 0,
         "completed_sections": [],
         "gaps": [],

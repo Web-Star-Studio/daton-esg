@@ -56,7 +56,7 @@ const baseProject = {
   scope: 'Escopo base',
   status: 'collecting',
   material_topics: [
-    { pillar: 'E' as const, topic: 'Clima e Energia', priority: 4 },
+    { pillar: 'E' as const, topic: 'GRI 305-1', priority: 'alta' as const },
   ],
   sdg_goals: null,
   indicator_values: null,

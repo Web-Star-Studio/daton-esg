@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { PrimaryBtn } from '../components/primary-btn'
 import {
   useProjectShellRegistration,
   useProjectWorkspace,
@@ -30,153 +31,261 @@ const PILLAR_COLORS: Record<Pillar, string> = {
 
 // ---------------------------------------------------------------------------
 // Help text catalog — definitions, data sources, formulas
+// Covers the v2 GRI-aligned catalog. Entries are keyed by `indicador`.
 // ---------------------------------------------------------------------------
 
 type HelpEntry = { definicao: string; fontes?: string; calculo?: string }
 
 const INDICATOR_HELP: Record<string, HelpEntry> = {
-  'Consumo total de energia': {
+  'Energia consumida — renovável': {
     definicao:
-      'Quantidade total de energia elétrica e térmica consumida pela organização (12 meses), discriminando fontes renováveis e não renováveis.',
+      'Energia (elétrica + térmica) consumida proveniente de fontes renováveis, conforme GRI 302-1.',
     fontes:
-      'Contas de energia elétrica, registros de consumo de combustíveis (NFs, planilhas de frota/caldeiras), relatórios internos de eficiência energética.',
+      'Contas de energia (com certificação I-REC/REC), registros de geração própria, PPA renovável.',
+  },
+  'Energia consumida — não-renovável': {
+    definicao:
+      'Energia consumida oriunda de fontes não-renováveis (combustíveis fósseis, rede convencional), conforme GRI 302-1.',
+    fontes:
+      'Contas de energia convencional, notas fiscais de combustíveis, registros de frota/caldeiras.',
     calculo:
-      'Energia total = Eletricidade (kWh) + \u03A3(Combustível \u00D7 Fator de conversão). Conversão: 1 L diesel \u2248 10,8 kWh (IPCC/MCTI).',
+      '\u03A3(Combustível \u00D7 Fator de conversão). Conversão: 1 L diesel \u2248 10,8 kWh (IPCC/MCTI).',
   },
   'Intensidade energética': {
     definicao:
-      'Relação entre o consumo total de energia e a produção física ou de serviço (toneladas processadas, unidades fabricadas, km percorridos etc.).',
+      'Relação entre o consumo total de energia e a produção física ou de serviço (GRI 302-3).',
     calculo: 'Intensidade = Consumo total de energia / Produção total.',
   },
-  'Emissões GEE – Scope 1': {
+  'Emissões GEE — Escopo 1': {
     definicao:
-      'Emissões diretas de GEE de fontes próprias ou controladas (combustíveis, frotas, processos industriais).',
+      'Emissões diretas de GEE de fontes próprias ou controladas (GRI 305-1).',
     fontes:
       'Inventário GHG Protocol, fatores de emissão (MCTI, IPCC, DEFRA), consumos de combustíveis.',
     calculo:
       'Escopo 1 = \u03A3(Combustível consumido \u00D7 Fator de emissão).',
   },
-  'Emissões GEE – Scope 2': {
+  'Emissões GEE — Escopo 2': {
     definicao:
-      'Emissões indiretas de GEE provenientes da eletricidade comprada.',
+      'Emissões indiretas de GEE provenientes da eletricidade comprada (GRI 305-2).',
     calculo:
       'Escopo 2 = Eletricidade consumida (kWh) \u00D7 Fator de emissão da rede.',
   },
-  'Emissões GEE – Scope 3': {
+  'Emissões GEE — Escopo 3': {
     definicao:
-      'Outras emissões indiretas (transporte terceirizado, resíduos, viagens corporativas).',
+      'Outras emissões indiretas — transporte terceirizado, resíduos, viagens corporativas (GRI 305-3).',
     calculo:
       'Escopo 3 = \u03A3(Atividade \u00D7 Fator de emissão por categoria).',
   },
-  'Metas de redução de GEE': {
-    definicao: 'Percentual de redução de emissões em relação ao ano-base.',
+  'Meta de redução de GEE': {
+    definicao:
+      'Percentual de redução de emissões em relação ao ano-base (GRI 305-5).',
     calculo:
       'Redução (%) = (Emissões ano-base \u2212 Emissões ano atual) / Emissões ano-base \u00D7 100.',
   },
-  'Consumo total de água': {
+  'Água captada — superficial': {
     definicao:
-      'Volume total de água captada de todas as fontes (rede pública, poços, rios, reuso).',
-    fontes:
-      'Contas de abastecimento, hidrômetros, relatórios de poço artesiano, registros internos.',
-    calculo: 'Consumo total = \u03A3 volume por fonte.',
+      'Volume de água captado de corpos d\u2019água superficiais (rios, lagos, barragens), conforme GRI 303-3.',
+  },
+  'Água captada — subterrânea': {
+    definicao:
+      'Volume captado de poços, aquíferos e águas subterrâneas (GRI 303-3).',
+  },
+  'Água captada — rede pública': {
+    definicao:
+      'Volume recebido de concessionária pública de abastecimento (GRI 303-3).',
+    fontes: 'Contas de abastecimento, hidrômetros.',
+  },
+  'Água captada — água do mar': {
+    definicao:
+      'Volume captado do mar, para uso direto ou após dessalinização (GRI 303-3).',
+  },
+  'Água captada — produzida/terceiros': {
+    definicao:
+      'Água de processos (ex.: petróleo) ou recebida de terceiros (GRI 303-3).',
+  },
+  'Água descartada': {
+    definicao:
+      'Volume total de efluentes descartados em corpos d\u2019água, solo ou rede pública após tratamento (GRI 303-4).',
+  },
+  'Consumo de água': {
+    definicao:
+      'Volume efetivamente consumido pela operação (captado \u2212 descartado), conforme GRI 303-5.',
+  },
+  'Água reutilizada': {
+    definicao:
+      'Volume de água reutilizada em ciclos produtivos da organização (GRI 303-3 — informação adicional).',
   },
   'Intensidade hídrica': {
-    definicao: 'Relação entre consumo total de água e a produção.',
-    calculo: 'Intensidade = Consumo total de água / Produção total.',
+    definicao: 'Relação entre consumo de água e a produção (GRI 303-5).',
+    calculo: 'Intensidade = Consumo de água / Produção total.',
   },
-  'Percentual de água reutilizada': {
-    definicao: 'Proporção de água reutilizada em relação ao consumo total.',
-    calculo: '% Reuso = (Volume reutilizado / Consumo total) \u00D7 100.',
-  },
-  'Total de resíduos gerados': {
-    definicao: 'Massa total de resíduos gerados pela operação no período.',
+  'Resíduos — reciclagem': {
+    definicao:
+      'Massa de resíduos destinada à reciclagem por terceiros (GRI 306-4).',
     fontes:
-      'MTRs (Manifesto de Transporte de Resíduos), notas fiscais de destinação, relatórios de coleta seletiva.',
-    calculo: 'Total = \u03A3 massa por tipo de resíduo.',
+      'MTRs (Manifesto de Transporte de Resíduos), notas fiscais de destinação.',
   },
-  'Percentual reciclado': {
-    definicao: 'Proporção de resíduos destinados à reciclagem.',
-    calculo:
-      '% Reciclagem = (Resíduos reciclados / Total de resíduos) \u00D7 100.',
-  },
-  'Percentual destinado ao reuso': {
-    definicao: 'Proporção de resíduos destinados ao reuso.',
-    calculo:
-      '% Reuso = (Resíduos reutilizados / Total de resíduos) \u00D7 100.',
-  },
-  'Percentual destinado ao aterro/incineração': {
+  'Resíduos — reuso': {
     definicao:
-      'Proporção de resíduos destinados a aterro sanitário ou incineração.',
-    calculo:
-      '% Aterro/Incineração = (Resíduos em aterro + incinerados) / Total \u00D7 100.',
+      'Massa de resíduos reutilizada interna ou externamente (GRI 306-4).',
   },
-  'Taxa de frequência de acidentes (LTIFR)': {
+  'Resíduos — compostagem': {
     definicao:
-      'Número de acidentes com afastamento por milhão de horas trabalhadas.',
-    fontes: 'Registros de CAT, SESMT, CIPA.',
-    calculo:
-      'LTIFR = (N\u00BA de acidentes com afastamento / Horas-homem trabalhadas) \u00D7 1.000.000.',
+      'Massa de resíduos orgânicos destinados à compostagem (GRI 306-4).',
+  },
+  'Resíduos — incineração com recuperação': {
+    definicao:
+      'Massa incinerada com recuperação energética (GRI 306-4 — desvio de disposição).',
+  },
+  'Resíduos — incineração sem recuperação': {
+    definicao:
+      'Massa incinerada sem recuperação energética (GRI 306-5 — disposição).',
+  },
+  'Resíduos — aterro': {
+    definicao: 'Massa destinada a aterro sanitário ou industrial (GRI 306-5).',
+  },
+  'Resíduos — outros destinos': {
+    definicao: 'Outras formas de disposição final não elencadas (GRI 306-5).',
+  },
+  'Horas-homem trabalhadas': {
+    definicao:
+      'Total de horas trabalhadas pela força de trabalho no período — base de cálculo para taxas de acidentes (GRI 403-9).',
+  },
+  'Acidentes com afastamento': {
+    definicao:
+      'Quantidade absoluta de acidentes de trabalho que resultaram em afastamento (GRI 403-9).',
+    fontes: 'CAT (Comunicação de Acidente de Trabalho), SESMT, CIPA.',
   },
   'Dias perdidos por acidentes': {
     definicao:
-      'Total de dias de trabalho perdidos em decorrência de acidentes ocupacionais.',
-    calculo: 'Soma dos dias de afastamento registrados no período.',
+      'Total de dias de trabalho perdidos em decorrência de acidentes ocupacionais (GRI 403-9).',
   },
-  'Número de acidentes com afastamento': {
+  'Taxa de frequência de acidentes (LTIFR)': {
     definicao:
-      'Quantidade absoluta de acidentes que geraram afastamento do trabalho.',
-    fontes:
-      'Registros de CAT (Comunicação de Acidente de Trabalho), SESMT, CIPA.',
+      'Número de acidentes com afastamento por milhão de horas trabalhadas (GRI 403-9).',
+    calculo:
+      'LTIFR = (Acidentes com afastamento / Horas-homem trabalhadas) \u00D7 1.000.000.',
   },
-  'Média de horas de treinamento por colaborador': {
+  'Fatalidades relacionadas ao trabalho': {
     definicao:
-      'Total de horas de treinamento dividido pelo número de colaboradores.',
-    calculo:
-      'Média = Total de horas de treinamento / N\u00BA total de colaboradores.',
+      'Número absoluto de fatalidades decorrentes de lesões ou doenças relacionadas ao trabalho (GRI 403-9).',
   },
-  'Percentual de diversidade – Diretoria': {
-    definicao: 'Proporção de grupos sub-representados no nível de diretoria.',
-    calculo:
-      '% = (Colaboradores de grupos sub-representados na diretoria / Total na diretoria) \u00D7 100.',
+  'Taxa de fatalidades': {
+    definicao:
+      'Taxa de fatalidades por milhão de horas-homem trabalhadas (GRI 403-9).',
+    calculo: 'Taxa = (Fatalidades / Horas-homem trabalhadas) \u00D7 1.000.000.',
   },
-  'Percentual de diversidade – Gerência': {
-    definicao: 'Proporção de grupos sub-representados no nível de gerência.',
-    calculo:
-      '% = (Colaboradores de grupos sub-representados na gerência / Total na gerência) \u00D7 100.',
+  'Total de colaboradores': {
+    definicao:
+      'Número total de empregados com vínculo direto no fim do período (GRI 2-7).',
   },
-  'Percentual de diversidade – Operacional': {
-    definicao: 'Proporção de grupos sub-representados no nível operacional.',
-    calculo:
-      '% = (Colaboradores de grupos sub-representados no operacional / Total no operacional) \u00D7 100.',
+  'Taxa de rotatividade — total': {
+    definicao:
+      'Proporção de colaboradores que deixaram a organização no período (GRI 401-1).',
+    calculo: 'Rotatividade = (Desligamentos / Quadro médio) \u00D7 100.',
   },
   'Número de denúncias recebidas': {
     definicao:
-      'Quantidade de denúncias recebidas via canal de ética, ouvidoria ou compliance.',
+      'Quantidade de denúncias recebidas via canal de ética, ouvidoria ou compliance (GRI 2-26).',
     fontes: 'Relatórios de Compliance, canal de ética, ouvidoria.',
   },
   'Número de denúncias resolvidas': {
-    definicao: 'Quantidade de denúncias encerradas/resolvidas no período.',
+    definicao:
+      'Quantidade de denúncias encerradas/resolvidas no período (GRI 2-26).',
     calculo:
       '% Resolução = (Denúncias resolvidas / Denúncias recebidas) \u00D7 100.',
   },
-  'Investimentos em projetos sustentáveis (CAPEX/OPEX)': {
-    definicao:
-      'Total de CAPEX e OPEX destinados a projetos com benefícios ambientais ou sociais.',
-    fontes: 'Controladoria, Planejamento, Contabilidade.',
-    calculo: 'Total = CAPEX sustentável + OPEX sustentável.',
-  },
-  'Receita proveniente de produtos/serviços sustentáveis': {
-    definicao:
-      'Receita gerada por produtos ou serviços classificados como sustentáveis (ex: energia limpa, produtos reciclados, economia circular).',
-    calculo:
-      'Receita sustentável / Receita total \u00D7 100 (para percentual).',
-  },
   'Valor econômico gerado e distribuído': {
     definicao:
-      'Valor econômico total gerado pela organização e sua distribuição entre stakeholders.',
+      'Valor econômico total gerado e sua distribuição entre stakeholders (GRI 201-1).',
     calculo:
       'VEG&D = Receita Líquida \u2212 Custos Operacionais + Pagamentos e Investimentos Sociais. Componentes: receitas, custos operacionais, salários e benefícios, pagamentos a financiadores e governos, investimentos na comunidade.',
   },
+}
+
+// ---------------------------------------------------------------------------
+// Numeric helpers (pt-BR friendly: accepts "1.234,56" or "1234.56")
+// ---------------------------------------------------------------------------
+
+const PT_BR_THOUSANDS_RE = /^\d{1,3}(?:\.\d{3})+$/
+
+function parseNumber(value: string | undefined | null): number | null {
+  if (value === undefined || value === null) return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  let normalized: string
+  if (trimmed.includes(',')) {
+    normalized = trimmed.replace(/\./g, '').replace(',', '.')
+  } else if (PT_BR_THOUSANDS_RE.test(trimmed)) {
+    // pt-BR thousands-only integer (e.g. "1.000" → 1000, "2.500.000" → 2500000).
+    normalized = trimmed.replace(/\./g, '')
+  } else {
+    normalized = trimmed
+  }
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(
+    value
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Template grouping — split a tema's items into blocks of siblings sharing
+// the same group_key, preserving display_order.
+// ---------------------------------------------------------------------------
+
+type TemplateBlock =
+  | { kind: 'solo'; item: IndicatorTemplateRecord }
+  | { kind: 'group'; groupKey: string; items: IndicatorTemplateRecord[] }
+
+function buildBlocks(items: IndicatorTemplateRecord[]): TemplateBlock[] {
+  const sorted = [...items].sort((a, b) => a.display_order - b.display_order)
+  const blocks: TemplateBlock[] = []
+  for (const item of sorted) {
+    if (!item.group_key) {
+      blocks.push({ kind: 'solo', item })
+      continue
+    }
+    const last = blocks[blocks.length - 1]
+    if (last && last.kind === 'group' && last.groupKey === item.group_key) {
+      last.items.push(item)
+    } else {
+      blocks.push({ kind: 'group', groupKey: item.group_key, items: [item] })
+    }
+  }
+  return blocks
+}
+
+// Compute the numeric value to display for a `computed_*` row, based on
+// sibling `input` rows in the same group_key.
+function computeDerivedValue(
+  item: IndicatorTemplateRecord,
+  siblings: IndicatorTemplateRecord[],
+  values: Record<string, string>
+): number | null {
+  const inputs = siblings.filter((s) => s.kind === 'input')
+  const numbers = inputs
+    .map((s) => parseNumber(values[s.indicador]))
+    .filter((n): n is number => n !== null)
+  if (numbers.length === 0) return null
+  if (item.kind === 'computed_sum') {
+    return numbers.reduce((acc, n) => acc + n, 0)
+  }
+  if (item.kind === 'computed_pct') {
+    const total = numbers.reduce((acc, n) => acc + n, 0)
+    if (total <= 0) return null
+    // Convention: numerator is the first input in display_order.
+    const firstInput = inputs[0]
+    const firstValue = firstInput
+      ? parseNumber(values[firstInput.indicador])
+      : null
+    if (firstValue === null) return null
+    return (firstValue / total) * 100
+  }
+  return null
 }
 
 // ---------------------------------------------------------------------------
@@ -200,7 +309,6 @@ export function ProjectIndicatorsPage() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [collapsedTemas, setCollapsedTemas] = useState<Set<string> | null>(null)
 
-  // Load indicator templates
   useEffect(() => {
     let active = true
     async function load() {
@@ -227,7 +335,8 @@ export function ProjectIndicatorsPage() {
     }
   }, [])
 
-  // Populate form from project.indicator_values
+  // Discard legacy indicator_values whose `indicador` no longer exists in
+  // the catalog (mirrors the silent-drop policy used in materiality).
   useEffect(() => {
     if (!project) return
     const saved = project.indicator_values
@@ -235,6 +344,9 @@ export function ProjectIndicatorsPage() {
       setValues({})
       return
     }
+    const validIndicators = new Set(
+      templates.filter((t) => t.kind === 'input').map((t) => t.indicador)
+    )
     const map: Record<string, string> = {}
     for (const entry of saved) {
       if (
@@ -244,11 +356,12 @@ export function ProjectIndicatorsPage() {
         'value' in entry
       ) {
         const key = (entry as { indicador: string }).indicador
+        if (templates.length > 0 && !validIndicators.has(key)) continue
         map[key] = String((entry as { value: string }).value)
       }
     }
     setValues(map)
-  }, [project])
+  }, [project, templates])
 
   const grouped = useMemo(() => {
     const groups: Record<string, IndicatorTemplateRecord[]> = {}
@@ -261,7 +374,6 @@ export function ProjectIndicatorsPage() {
 
   const temas = useMemo(() => Object.keys(grouped), [grouped])
 
-  // Start with all themes collapsed once templates are loaded
   useEffect(() => {
     if (temas.length > 0 && collapsedTemas === null) {
       setCollapsedTemas(new Set(temas))
@@ -291,6 +403,7 @@ export function ProjectIndicatorsPage() {
       const indicatorValues: IndicatorValue[] = []
       for (const [tema, items] of Object.entries(grouped)) {
         for (const item of items) {
+          if (item.kind !== 'input') continue
           const val = values[item.indicador]?.trim()
           if (val) {
             indicatorValues.push({
@@ -318,6 +431,96 @@ export function ProjectIndicatorsPage() {
     }
   }
 
+  function renderRow(
+    item: IndicatorTemplateRecord,
+    siblings: IndicatorTemplateRecord[]
+  ) {
+    const help = INDICATOR_HELP[item.indicador]
+    const isComputed = item.kind !== 'input'
+    const rawValue = values[item.indicador]?.trim()
+
+    let displayValue: string = values[item.indicador] ?? ''
+    if (isComputed) {
+      const derived = computeDerivedValue(item, siblings, values)
+      displayValue = derived === null ? '—' : formatNumber(derived)
+    }
+
+    return (
+      <div
+        key={item.indicador}
+        className="group rounded-xl px-5 py-3 transition-colors hover:bg-[#e8e8ed]/40"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <label
+              htmlFor={`ind-${item.indicador}`}
+              className={`truncate text-[13px] font-medium tracking-[-0.01em] ${isComputed ? 'text-[#6b6b72]' : 'text-[#1d1d1f]'}`}
+            >
+              {item.indicador}
+            </label>
+            {item.gri_code ? (
+              <span className="shrink-0 rounded-full bg-[#eef3fb] px-2 py-0.5 text-[10px] font-semibold tracking-[0.01em] text-[#0673e0]">
+                {item.gri_code}
+              </span>
+            ) : null}
+            {isComputed ? (
+              <span className="shrink-0 rounded-full bg-[#f1f1f3] px-2 py-0.5 text-[10px] font-medium text-[#86868b]">
+                calculado
+              </span>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-3">
+            <input
+              id={`ind-${item.indicador}`}
+              type="text"
+              value={displayValue}
+              onChange={(e) =>
+                !isComputed && updateValue(item.indicador, e.target.value)
+              }
+              readOnly={isComputed}
+              placeholder="—"
+              className={`apple-focus-ring w-36 rounded border-0 px-4 py-1.5 text-right text-[13px] font-semibold text-[#1d1d1f] transition-all focus:ring-2 focus:ring-primary/20 ${isComputed ? 'cursor-default bg-[#f1f1f3] text-[#6b6b72]' : 'bg-[#e8e8ed]'}`}
+            />
+            <span className="w-20 text-[12px] font-medium text-[#86868b]">
+              {item.unidade}
+            </span>
+          </div>
+        </div>
+        {help ? (
+          <div className="mt-2 rounded-lg border border-black/5 bg-[#f9f9fb] px-4 py-3 text-[12px] leading-5 tracking-[-0.01em] text-[#6b6b72]">
+            <p>
+              <span className="font-medium text-[#3a3a3c]">Definição: </span>
+              {help.definicao}
+            </p>
+            {help.fontes ? (
+              <p className="mt-1">
+                <span className="font-medium text-[#3a3a3c]">Fontes: </span>
+                {help.fontes}
+              </p>
+            ) : null}
+            {help.calculo ? (
+              <p className="mt-1">
+                <span className="font-medium text-[#3a3a3c]">Cálculo: </span>
+                {help.calculo}
+              </p>
+            ) : null}
+            {!isComputed && rawValue ? (
+              <p className="mt-1.5 border-t border-black/5 pt-1.5">
+                <span className="font-medium text-[#1d1d1f]">
+                  Valor informado:{' '}
+                </span>
+                <span className="font-semibold text-[#1d1d1f]">{rawValue}</span>
+                {item.unidade ? (
+                  <span className="ml-1 text-[#86868b]">{item.unidade}</span>
+                ) : null}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto bg-white px-6 pt-6 pb-10 sm:px-10">
       {workspaceError || pageError ? (
@@ -333,8 +536,9 @@ export function ProjectIndicatorsPage() {
           </h2>
           <p className="mt-1 max-w-[620px] text-[13px] leading-6 tracking-[-0.01em] text-[#6b6b72]">
             Preencha os indicadores quantitativos disponíveis
-            {project ? ` de ${project.org_name}` : ''}. Esses dados alimentam
-            diretamente a geração do relatório.
+            {project ? ` de ${project.org_name}` : ''}. Campos marcados como{' '}
+            <span className="font-medium text-[#3a3a3c]">calculado</span> são
+            derivados automaticamente dos valores informados nos campos irmãos.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -343,14 +547,12 @@ export function ProjectIndicatorsPage() {
               {saveMessage}
             </span>
           ) : null}
-          <button
-            type="button"
+          <PrimaryBtn
             onClick={() => void handleSave()}
             disabled={isSaving || isLoading || !currentProjectId}
-            className="apple-focus-ring rounded-full bg-[#0f1923] px-4 py-2 text-[12px] font-medium text-white transition hover:bg-[#1a2632] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSaving ? 'Salvando…' : 'Salvar'}
-          </button>
+          </PrimaryBtn>
         </div>
       </header>
 
@@ -365,6 +567,11 @@ export function ProjectIndicatorsPage() {
             const color = PILLAR_COLORS[pillar]
             const items = grouped[tema]
             const isCollapsed = collapsedTemas?.has(tema) ?? true
+            const filledCount = items.filter(
+              (i) => i.kind === 'input' && values[i.indicador]?.trim()
+            ).length
+            const totalInputs = items.filter((i) => i.kind === 'input').length
+            const blocks = buildBlocks(items)
             return (
               <section key={tema}>
                 <button
@@ -379,8 +586,7 @@ export function ProjectIndicatorsPage() {
                   <h3 className="flex-1 text-[14px] font-medium tracking-[-0.01em] text-[#1d1d1f]">
                     {tema}
                     <span className="ml-2 text-[12px] font-normal text-[#86868b]">
-                      {items.filter((i) => values[i.indicador]?.trim()).length}/
-                      {items.length}
+                      {filledCount}/{totalInputs}
                     </span>
                   </h3>
                   <svg
@@ -398,81 +604,19 @@ export function ProjectIndicatorsPage() {
                   </svg>
                 </button>
                 {!isCollapsed && (
-                  <div className="flex flex-col gap-0.5">
-                    {items.map((item) => {
-                      const help = INDICATOR_HELP[item.indicador]
-                      const currentValue = values[item.indicador]?.trim()
+                  <div className="flex flex-col gap-2">
+                    {blocks.map((block) => {
+                      if (block.kind === 'solo') {
+                        return renderRow(block.item, [block.item])
+                      }
                       return (
                         <div
-                          key={item.indicador}
-                          className="group rounded-xl px-5 py-3 transition-colors hover:bg-[#e8e8ed]/40"
+                          key={`group:${tema}:${block.groupKey}`}
+                          className="rounded-xl border border-black/5 bg-[#fafafc] p-1"
                         >
-                          <div className="flex items-center justify-between">
-                            <div className="flex min-w-0 flex-1 flex-col">
-                              <label
-                                htmlFor={`ind-${item.indicador}`}
-                                className="text-[13px] font-medium tracking-[-0.01em] text-[#1d1d1f]"
-                              >
-                                {item.indicador}
-                              </label>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <input
-                                id={`ind-${item.indicador}`}
-                                type="text"
-                                value={values[item.indicador] ?? ''}
-                                onChange={(e) =>
-                                  updateValue(item.indicador, e.target.value)
-                                }
-                                placeholder="—"
-                                className="apple-focus-ring w-36 rounded border-0 bg-[#e8e8ed] px-4 py-1.5 text-right text-[13px] font-semibold text-[#1d1d1f] transition-all focus:ring-2 focus:ring-primary/20"
-                              />
-                              <span className="w-20 text-[12px] font-medium text-[#86868b]">
-                                {item.unidade}
-                              </span>
-                            </div>
-                          </div>
-                          {help ? (
-                            <div className="mt-2 rounded-lg border border-black/5 bg-[#f9f9fb] px-4 py-3 text-[12px] leading-5 tracking-[-0.01em] text-[#6b6b72]">
-                              <p>
-                                <span className="font-medium text-[#3a3a3c]">
-                                  Definição:{' '}
-                                </span>
-                                {help.definicao}
-                              </p>
-                              {help.fontes ? (
-                                <p className="mt-1">
-                                  <span className="font-medium text-[#3a3a3c]">
-                                    Fontes:{' '}
-                                  </span>
-                                  {help.fontes}
-                                </p>
-                              ) : null}
-                              {help.calculo ? (
-                                <p className="mt-1">
-                                  <span className="font-medium text-[#3a3a3c]">
-                                    Cálculo:{' '}
-                                  </span>
-                                  {help.calculo}
-                                </p>
-                              ) : null}
-                              {currentValue ? (
-                                <p className="mt-1.5 border-t border-black/5 pt-1.5">
-                                  <span className="font-medium text-[#1d1d1f]">
-                                    Valor informado:{' '}
-                                  </span>
-                                  <span className="font-semibold text-[#1d1d1f]">
-                                    {currentValue}
-                                  </span>
-                                  {item.unidade ? (
-                                    <span className="ml-1 text-[#86868b]">
-                                      {item.unidade}
-                                    </span>
-                                  ) : null}
-                                </p>
-                              ) : null}
-                            </div>
-                          ) : null}
+                          {block.items.map((child) =>
+                            renderRow(child, block.items)
+                          )}
                         </div>
                       )
                     })}

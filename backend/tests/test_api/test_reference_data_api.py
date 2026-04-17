@@ -119,8 +119,22 @@ def test_list_indicator_templates(monkeypatch, reference_app) -> None:
         IndicatorTemplate(
             id=1,
             tema="Clima e Energia",
+            indicador="Energia consumida — renovável",
+            unidade="kWh/ano",
+            gri_code="GRI 302-1",
+            group_key="energy_mix",
+            kind="input",
+            display_order=0,
+        ),
+        IndicatorTemplate(
+            id=2,
+            tema="Clima e Energia",
             indicador="Consumo total de energia",
             unidade="kWh/ano",
+            gri_code="GRI 302-1",
+            group_key="energy_mix",
+            kind="computed_sum",
+            display_order=1,
         ),
     ]
     _patch_session_execute(monkeypatch, rows)
@@ -130,8 +144,13 @@ def test_list_indicator_templates(monkeypatch, reference_app) -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert len(payload) == 1
+    assert len(payload) == 2
     assert payload[0]["tema"] == "Clima e Energia"
+    assert payload[0]["gri_code"] == "GRI 302-1"
+    assert payload[0]["group_key"] == "energy_mix"
+    assert payload[0]["kind"] == "input"
+    assert payload[0]["display_order"] == 0
+    assert payload[1]["kind"] == "computed_sum"
 
 
 def test_endpoints_require_auth(reference_app) -> None:

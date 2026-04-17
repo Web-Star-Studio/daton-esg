@@ -1,4 +1,8 @@
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict
+
+IndicatorTemplateKind = Literal["input", "computed_sum", "computed_pct"]
 
 
 class GriStandardResponse(BaseModel):
@@ -30,6 +34,10 @@ class IndicatorTemplateResponse(BaseModel):
     tema: str
     indicador: str
     unidade: str
+    gri_code: str | None = None
+    group_key: str | None = None
+    kind: IndicatorTemplateKind = "input"
+    display_order: int = 0
 
 
 class CaptacaoRowResponse(BaseModel):
