@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ExtractionSuggestionsPanel } from '../components/extraction-suggestions-panel'
 import { PrimaryBtn } from '../components/primary-btn'
+import { useExtractionSuggestions } from '../hooks/use-extraction-suggestions'
 import {
   useProjectShellRegistration,
   useProjectWorkspace,
 } from '../hooks/use-project-workspace'
-import { fetchIndicatorTemplates, updateProject } from '../services/api-client'
+import {
+  fetchIndicatorTemplates,
+  fetchProject,
+  updateProject,
+} from '../services/api-client'
+import type { ExtractionSuggestion } from '../types/extraction'
 import type { IndicatorTemplateRecord, IndicatorValue } from '../types/project'
 
 // ---------------------------------------------------------------------------
@@ -295,10 +302,31 @@ function computeDerivedValue(
 export function ProjectIndicatorsPage() {
   const { currentProjectId, project, setProject, workspaceError } =
     useProjectWorkspace()
+  const [isExtractionPanelOpen, setIsExtractionPanelOpen] = useState(false)
+  const extraction = useExtractionSuggestions(currentProjectId, {
+    targetKind: 'indicator_value',
+  })
+
+  const openExtractionPanel = useCallback(() => {
+    setIsExtractionPanelOpen(true)
+  }, [])
+
+  const pageActions = useMemo(
+    () => [
+      {
+        label: 'Auto-preencher com IA',
+        icon: 'auto_awesome',
+        variant: 'secondary' as const,
+        onClick: openExtractionPanel,
+      },
+    ],
+    [openExtractionPanel]
+  )
 
   useProjectShellRegistration({
     activeSidebarKey: 'indicators',
     pageTitle: 'Indicadores',
+    pageActions,
   })
 
   const [templates, setTemplates] = useState<IndicatorTemplateRecord[]>([])
@@ -430,6 +458,52 @@ export function ProjectIndicatorsPage() {
       setIsSaving(false)
     }
   }
+
+  const refreshProjectAfterApply = useCallback(async () => {
+    if (!currentProjectId) return
+    try {
+      const refreshed = await fetchProject(currentProjectId)
+      setProject(refreshed)
+    } catch {
+      /* keep previous state */
+    }
+  }, [currentProjectId, setProject])
+
+  const handleAcceptSuggestion = useCallback(
+    async (suggestion: ExtractionSuggestion) => {
+      const updated = await extraction.updateSuggestion(suggestion.id, {
+        action: 'accept',
+      })
+      if (updated) await refreshProjectAfterApply()
+    },
+    [extraction, refreshProjectAfterApply]
+  )
+
+  const handleRejectSuggestion = useCallback(
+    async (suggestion: ExtractionSuggestion) => {
+      await extraction.updateSuggestion(suggestion.id, { action: 'reject' })
+    },
+    [extraction]
+  )
+
+  const handleAcceptAll = useCallback(
+    async (ids: string[]) => {
+      const result = await extraction.bulkUpdate({ ids, action: 'accept_all' })
+      if (result && result.succeeded.length > 0) await refreshProjectAfterApply()
+    },
+    [extraction, refreshProjectAfterApply]
+  )
+
+  const handleRejectAll = useCallback(
+    async (ids: string[]) => {
+      await extraction.bulkUpdate({ ids, action: 'reject_all' })
+    },
+    [extraction]
+  )
+
+  const handleStartExtraction = useCallback(() => {
+    void extraction.startRun('indicators')
+  }, [extraction])
 
   function renderRow(
     item: IndicatorTemplateRecord,
@@ -627,6 +701,20 @@ export function ProjectIndicatorsPage() {
           })}
         </div>
       )}
+      <ExtractionSuggestionsPanel
+        isOpen={isExtractionPanelOpen}
+        onClose={() => setIsExtractionPanelOpen(false)}
+        title="Sugestões de Indicadores"
+        suggestions={extraction.suggestions}
+        isStreaming={extraction.isStreaming}
+        isLoading={extraction.isLoading}
+        error={extraction.error}
+        onAccept={handleAcceptSuggestion}
+        onReject={handleRejectSuggestion}
+        onAcceptAll={handleAcceptAll}
+        onRejectAll={handleRejectAll}
+        onStart={handleStartExtraction}
+      />
     </div>
   )
 }

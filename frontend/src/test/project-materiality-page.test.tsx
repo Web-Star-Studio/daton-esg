@@ -1,43 +1,41 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { ProjectWorkspaceLayout } from '../components/project-workspace-layout'
-import { useAuth } from '../hooks/use-auth'
+
+import {
+  ProjectWorkspaceContext,
+  type ProjectWorkspaceContextValue,
+} from '../hooks/use-project-workspace'
 import { ProjectMaterialityPage } from '../pages/project-materiality-page'
 import {
   fetchGriStandards,
   fetchOdsGoals,
-  fetchProject,
-  fetchProjects,
+  listExtractionSuggestions,
   updateProject,
 } from '../services/api-client'
+import type { ProjectRecord } from '../types/project'
 
-vi.mock('../hooks/use-auth', () => ({
-  useAuth: vi.fn(),
-}))
-
+// Mock the api-client module so the page never reaches the network and we
+// don't pull the heavy module graph (markdown, amplify, etc.).
 vi.mock('../services/api-client', () => ({
-  createProjectGenerationThread: vi.fn(),
-  deleteProjectGenerationThread: vi.fn(),
-  fetchIndicatorTemplates: vi.fn(),
   fetchGriStandards: vi.fn(),
   fetchOdsGoals: vi.fn(),
   fetchProject: vi.fn(),
-  fetchProjectGenerationThread: vi.fn(),
-  fetchProjectGenerationThreads: vi.fn(),
-  fetchProjects: vi.fn(),
-  streamProjectGenerationMessage: vi.fn(),
   updateProject: vi.fn(),
+  // Hook below uses these — keep them as no-op vi.fn()s.
+  listExtractionSuggestions: vi.fn(),
+  startExtractionRun: vi.fn(),
+  fetchExtractionRun: vi.fn(),
+  streamExtractionRun: vi.fn(),
+  updateExtractionSuggestion: vi.fn(),
+  bulkUpdateExtractionSuggestions: vi.fn(),
 }))
 
-const mockUseAuth = vi.mocked(useAuth)
-const mockFetchProject = vi.mocked(fetchProject)
-const mockFetchProjects = vi.mocked(fetchProjects)
 const mockFetchGriStandards = vi.mocked(fetchGriStandards)
 const mockFetchOdsGoals = vi.mocked(fetchOdsGoals)
 const mockUpdateProject = vi.mocked(updateProject)
+const mockListExtractionSuggestions = vi.mocked(listExtractionSuggestions)
 
-const baseProject = {
+const baseProject: ProjectRecord = {
   id: 'project-1',
   org_name: 'Acme Inc.',
   org_sector: 'Energia',
@@ -53,34 +51,46 @@ const baseProject = {
   updated_at: '2026-04-06T00:00:00Z',
 }
 
+function makeContextValue(
+  overrides: Partial<ProjectWorkspaceContextValue> = {}
+): ProjectWorkspaceContextValue {
+  return {
+    closeAgentDrawer: vi.fn(),
+    currentProjectId: 'project-1',
+    isAgentDrawerOpen: false,
+    isLoadingWorkspace: false,
+    navigateToProject: vi.fn(),
+    openAgentDrawer: vi.fn(),
+    project: baseProject,
+    projects: [baseProject],
+    setActiveSidebarKey: vi.fn(),
+    setPageActions: vi.fn(),
+    setPageTitle: vi.fn(),
+    setProject: vi.fn(),
+    workspaceError: null,
+    ...overrides,
+  }
+}
+
+function renderPage(
+  contextOverrides: Partial<ProjectWorkspaceContextValue> = {}
+) {
+  const value = makeContextValue(contextOverrides)
+  const utils = render(
+    <ProjectWorkspaceContext.Provider value={value}>
+      <ProjectMaterialityPage />
+    </ProjectWorkspaceContext.Provider>
+  )
+  return { ...utils, contextValue: value }
+}
+
 describe('ProjectMaterialityPage', () => {
   beforeEach(() => {
-    mockUseAuth.mockReturnValue({
-      accessToken: 'access-token',
-      completeNewPassword: vi.fn(async () => undefined),
-      idToken: 'id-token',
-      isAuthenticated: true,
-      isLoading: false,
-      login: vi.fn(async () => undefined),
-      logout: vi.fn(async () => undefined),
-      pendingChallenge: null,
-      resetPendingChallenge: vi.fn(),
-      user: {
-        id: 'user-1',
-        cognito_sub: 'cognito-sub-1',
-        email: 'consultor@example.com',
-        name: 'Consultor ESG',
-        role: 'consultant',
-        created_at: '2026-04-06T00:00:00Z',
-      },
-    })
-    mockFetchProject.mockReset()
-    mockFetchProjects.mockReset()
     mockFetchGriStandards.mockReset()
     mockFetchOdsGoals.mockReset()
     mockUpdateProject.mockReset()
-    mockFetchProject.mockResolvedValue(baseProject)
-    mockFetchProjects.mockResolvedValue([baseProject])
+    mockListExtractionSuggestions.mockReset()
+
     mockFetchGriStandards.mockResolvedValue([
       {
         code: 'GRI 301-1',
@@ -115,22 +125,8 @@ describe('ProjectMaterialityPage', () => {
       material_topics: (payload.material_topics ?? null) as never,
       sdg_goals: (payload.sdg_goals ?? null) as never,
     }))
+    mockListExtractionSuggestions.mockResolvedValue({ items: [], total: 0 })
   })
-
-  function renderPage() {
-    return render(
-      <MemoryRouter initialEntries={['/projects/project-1/materiality']}>
-        <Routes>
-          <Route
-            path="/projects/:projectId"
-            element={<ProjectWorkspaceLayout />}
-          >
-            <Route path="materiality" element={<ProjectMaterialityPage />} />
-          </Route>
-        </Routes>
-      </MemoryRouter>
-    )
-  }
 
   it('renders pillars and GRI disclosures from the reference API', async () => {
     renderPage()

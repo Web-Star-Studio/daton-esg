@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ExtractionSuggestionsPanel } from '../components/extraction-suggestions-panel'
 import { PrimaryBtn } from '../components/primary-btn'
+import { useExtractionSuggestions } from '../hooks/use-extraction-suggestions'
 import {
   useProjectShellRegistration,
   useProjectWorkspace,
@@ -7,8 +9,10 @@ import {
 import {
   fetchGriStandards,
   fetchOdsGoals,
+  fetchProject,
   updateProject,
 } from '../services/api-client'
+import type { ExtractionSuggestion } from '../types/extraction'
 import type {
   GriStandardRecord,
   MaterialTopic,
@@ -153,10 +157,31 @@ function normalizeSdgGoals(raw: unknown): SdgSelection[] {
 export function ProjectMaterialityPage() {
   const { currentProjectId, project, setProject, workspaceError } =
     useProjectWorkspace()
+  const [isExtractionPanelOpen, setIsExtractionPanelOpen] = useState(false)
+  const extraction = useExtractionSuggestions(currentProjectId, {
+    targetKind: ['material_topic', 'sdg_goal'],
+  })
+
+  const openExtractionPanel = useCallback(() => {
+    setIsExtractionPanelOpen(true)
+  }, [])
+
+  const pageActions = useMemo(
+    () => [
+      {
+        label: 'Auto-preencher com IA',
+        icon: 'auto_awesome',
+        variant: 'secondary' as const,
+        onClick: openExtractionPanel,
+      },
+    ],
+    [openExtractionPanel]
+  )
 
   useProjectShellRegistration({
     activeSidebarKey: 'materiality',
     pageTitle: 'Materialidade & ODS',
+    pageActions,
   })
 
   const [griStandards, setGriStandards] = useState<GriStandardRecord[]>([])
@@ -317,6 +342,59 @@ export function ProjectMaterialityPage() {
       setIsSaving(false)
     }
   }
+
+  const refreshProjectAfterApply = useCallback(async () => {
+    if (!currentProjectId) return
+    try {
+      const refreshed = await fetchProject(currentProjectId)
+      setProject(refreshed)
+    } catch {
+      /* keep previous state on failure */
+    }
+  }, [currentProjectId, setProject])
+
+  const handleAcceptSuggestion = useCallback(
+    async (suggestion: ExtractionSuggestion) => {
+      const updated = await extraction.updateSuggestion(suggestion.id, {
+        action: 'accept',
+      })
+      if (updated) {
+        await refreshProjectAfterApply()
+      }
+    },
+    [extraction, refreshProjectAfterApply]
+  )
+
+  const handleRejectSuggestion = useCallback(
+    async (suggestion: ExtractionSuggestion) => {
+      await extraction.updateSuggestion(suggestion.id, { action: 'reject' })
+    },
+    [extraction]
+  )
+
+  const handleAcceptAll = useCallback(
+    async (ids: string[]) => {
+      const result = await extraction.bulkUpdate({
+        ids,
+        action: 'accept_all',
+      })
+      if (result && result.succeeded.length > 0) {
+        await refreshProjectAfterApply()
+      }
+    },
+    [extraction, refreshProjectAfterApply]
+  )
+
+  const handleRejectAll = useCallback(
+    async (ids: string[]) => {
+      await extraction.bulkUpdate({ ids, action: 'reject_all' })
+    },
+    [extraction]
+  )
+
+  const handleStartExtraction = useCallback(() => {
+    void extraction.startRun('materiality')
+  }, [extraction])
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto bg-white px-6 pt-6 pb-10 sm:px-10">
@@ -579,6 +657,20 @@ export function ProjectMaterialityPage() {
           )}
         </>
       )}
+      <ExtractionSuggestionsPanel
+        isOpen={isExtractionPanelOpen}
+        onClose={() => setIsExtractionPanelOpen(false)}
+        title="Sugestões de Materialidade & ODS"
+        suggestions={extraction.suggestions}
+        isStreaming={extraction.isStreaming}
+        isLoading={extraction.isLoading}
+        error={extraction.error}
+        onAccept={handleAcceptSuggestion}
+        onReject={handleRejectSuggestion}
+        onAcceptAll={handleAcceptAll}
+        onRejectAll={handleRejectAll}
+        onStart={handleStartExtraction}
+      />
     </div>
   )
 }
