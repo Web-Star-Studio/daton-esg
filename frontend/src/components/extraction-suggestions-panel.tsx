@@ -226,7 +226,10 @@ export function ExtractionSuggestionsPanel({
     return () => window.removeEventListener('keydown', handler)
   }, [isOpen, onClose])
 
-  const pendingIds = useMemo(() => suggestions.map((s) => s.id), [suggestions])
+  const pendingIds = useMemo(
+    () => suggestions.filter((s) => s.status === 'pending').map((s) => s.id),
+    [suggestions]
+  )
   const [busy, setBusy] = useState(false)
 
   if (typeof document === 'undefined') return null
@@ -246,6 +249,10 @@ export function ExtractionSuggestionsPanel({
         isOpen ? 'translate-x-0' : 'translate-x-full'
       }`}
       aria-hidden={!isOpen}
+      // `inert` removes the subtree from the keyboard tab order while closed,
+      // which avoids the aria-hidden-focus accessibility violation that fires
+      // when focusable buttons live inside an aria-hidden container.
+      inert={!isOpen}
     >
       <div
         role="dialog"

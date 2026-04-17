@@ -233,6 +233,10 @@ async def _run_materiality(
         await event_queue.put(("extractor_started", {"kind": "materiality"}))
 
     persisted = 0
+    # Buffer SSE events until commit succeeds, so a late commit failure can't
+    # leak phantom suggestions to clients (a terminal-replay reconnect would
+    # then show fewer rows than the live stream emitted).
+    pending_events: list[tuple[str, dict[str, Any]]] = []
     async with SessionLocal() as session:
         project = await session.get(Project, project_id)
         if project is None:
@@ -251,8 +255,7 @@ async def _run_materiality(
                 provenance=_provenance_to_jsonable(topic.provenance),
             )
             persisted += 1
-            if event_queue is not None:
-                await event_queue.put(("suggestion", _suggestion_to_event(row)))
+            pending_events.append(("suggestion", _suggestion_to_event(row)))
 
         for sdg in extraction.sdg_goals:
             row = await _persist_suggestion(
@@ -265,12 +268,13 @@ async def _run_materiality(
                 provenance=_provenance_to_jsonable(sdg.provenance),
             )
             persisted += 1
-            if event_queue is not None:
-                await event_queue.put(("suggestion", _suggestion_to_event(row)))
+            pending_events.append(("suggestion", _suggestion_to_event(row)))
 
         await session.commit()
 
     if event_queue is not None:
+        for event in pending_events:
+            await event_queue.put(event)
         await event_queue.put(
             ("extractor_completed", {"kind": "materiality", "count": persisted})
         )
@@ -288,6 +292,7 @@ async def _run_indicators(
         await event_queue.put(("extractor_started", {"kind": "indicators"}))
 
     persisted = 0
+    pending_events: list[tuple[str, dict[str, Any]]] = []
     async with SessionLocal() as session:
         project = await session.get(Project, project_id)
         if project is None:
@@ -334,12 +339,13 @@ async def _run_indicators(
                 reviewer_notes=notes,
             )
             persisted += 1
-            if event_queue is not None:
-                await event_queue.put(("suggestion", _suggestion_to_event(row)))
+            pending_events.append(("suggestion", _suggestion_to_event(row)))
 
         await session.commit()
 
     if event_queue is not None:
+        for event in pending_events:
+            await event_queue.put(event)
         await event_queue.put(
             ("extractor_completed", {"kind": "indicators", "count": persisted})
         )
@@ -368,94 +374,170 @@ async def run_extraction(
 
     Opens its own DB session (this runs in a background task, decoupled from
     the request lifecycle, mirroring report_pipeline's pattern).
+
+    The body is wrapped in try/finally so the SSE consumer never hangs:
+    every early-return or unexpected exception still pushes the ``None``
+    sentinel into ``event_queue`` (and an ``error`` event when applicable).
     """
     current_settings = settings or get_settings()
     timeout = current_settings.extraction_timeout_seconds
+    terminal_emitted = False
 
-    async with SessionLocal() as session:
-        run = await session.get(ExtractionRun, run_id)
-        if run is None:
-            logger.error("extraction.run_not_found", extra={"run_id": str(run_id)})
-            return
-        project = await session.get(Project, run.project_id)
-        if project is None:
-            logger.error(
-                "extraction.project_not_found",
-                extra={"run_id": str(run_id), "project_id": str(run.project_id)},
-            )
-            run.status = ExtractionRunStatus.FAILED
-            run.error = "project not found"
-            run.completed_at = datetime.now(timezone.utc)
-            await session.commit()
-            return
-
-        run.model_used = (
-            current_settings.extraction_model
-            or current_settings.report_generation_model
-        )
-        run.documents_considered = await _list_indexed_documents(session, project.id)
-        await session.commit()
-
-        if event_queue is not None:
-            await event_queue.put(
-                (
-                    "run_started",
-                    {
-                        "run_id": str(run.id),
-                        "kind": run.kind.value,
-                        "model": run.model_used,
+    try:
+        async with SessionLocal() as session:
+            run = await session.get(ExtractionRun, run_id)
+            if run is None:
+                logger.error("extraction.run_not_found", extra={"run_id": str(run_id)})
+                if event_queue is not None:
+                    await event_queue.put(("error", {"message": "run not found"}))
+                return
+            project = await session.get(Project, run.project_id)
+            if project is None:
+                logger.error(
+                    "extraction.project_not_found",
+                    extra={
+                        "run_id": str(run_id),
+                        "project_id": str(run.project_id),
                     },
                 )
-            )
+                run.status = ExtractionRunStatus.FAILED
+                run.error = "project not found"
+                run.completed_at = datetime.now(timezone.utc)
+                await session.commit()
+                if event_queue is not None:
+                    await event_queue.put(("error", {"message": run.error}))
+                    await event_queue.put(
+                        (
+                            "run_completed",
+                            {
+                                "run_id": str(run.id),
+                                "status": run.status.value,
+                                "summary": None,
+                            },
+                        )
+                    )
+                    terminal_emitted = True
+                return
 
-        # Sequential execution — each extractor opens its own SessionLocal so
-        # they never share an AsyncSession (which is not safe for concurrent
-        # access across tasks).
-        labels: list[str] = []
-        coros: list[Any] = []
-        if run.kind in (ExtractionRunKind.MATERIALITY, ExtractionRunKind.BOTH):
-            labels.append("materiality")
-            coros.append(
-                _run_materiality(
-                    run_id=run.id,
-                    project_id=project.id,
-                    settings=current_settings,
-                    event_queue=event_queue,
+            run.model_used = (
+                current_settings.extraction_model
+                or current_settings.report_generation_model
+            )
+            run.documents_considered = await _list_indexed_documents(
+                session, project.id
+            )
+            await session.commit()
+
+            if event_queue is not None:
+                await event_queue.put(
+                    (
+                        "run_started",
+                        {
+                            "run_id": str(run.id),
+                            "kind": run.kind.value,
+                            "model": run.model_used,
+                        },
+                    )
                 )
-            )
-        if run.kind in (ExtractionRunKind.INDICATORS, ExtractionRunKind.BOTH):
-            labels.append("indicators")
-            coros.append(
-                _run_indicators(
-                    run_id=run.id,
-                    project_id=project.id,
-                    settings=current_settings,
-                    event_queue=event_queue,
+
+            # Sequential execution — each extractor opens its own SessionLocal so
+            # they never share an AsyncSession (which is not safe for concurrent
+            # access across tasks).
+            labels: list[str] = []
+            coros: list[Any] = []
+            if run.kind in (ExtractionRunKind.MATERIALITY, ExtractionRunKind.BOTH):
+                labels.append("materiality")
+                coros.append(
+                    _run_materiality(
+                        run_id=run.id,
+                        project_id=project.id,
+                        settings=current_settings,
+                        event_queue=event_queue,
+                    )
                 )
-            )
+            if run.kind in (ExtractionRunKind.INDICATORS, ExtractionRunKind.BOTH):
+                labels.append("indicators")
+                coros.append(
+                    _run_indicators(
+                        run_id=run.id,
+                        project_id=project.id,
+                        settings=current_settings,
+                        event_queue=event_queue,
+                    )
+                )
 
-        async def _run_sequentially() -> list[Any]:
-            results_local: list[Any] = []
-            for coro in coros:
-                try:
-                    results_local.append(await coro)
-                except Exception as exc:  # noqa: BLE001 — captured per-extractor
-                    results_local.append(exc)
-            return results_local
+            async def _run_sequentially() -> list[Any]:
+                results_local: list[Any] = []
+                for coro in coros:
+                    try:
+                        results_local.append(await coro)
+                    except Exception as exc:  # noqa: BLE001 — captured per-extractor
+                        results_local.append(exc)
+                return results_local
 
-        try:
-            results: list[Any] = await asyncio.wait_for(
-                _run_sequentially(), timeout=timeout
-            )
-        except asyncio.TimeoutError:
-            logger.warning("extraction.run_timeout", extra={"run_id": str(run.id)})
-            run.status = ExtractionRunStatus.FAILED
-            run.error = f"timeout after {timeout}s"
-            run.summary_stats = {"error": run.error}
+            try:
+                results: list[Any] = await asyncio.wait_for(
+                    _run_sequentially(), timeout=timeout
+                )
+            except asyncio.TimeoutError:
+                logger.warning("extraction.run_timeout", extra={"run_id": str(run.id)})
+                run.status = ExtractionRunStatus.FAILED
+                run.error = f"timeout after {timeout}s"
+                run.summary_stats = {"error": run.error}
+                run.completed_at = datetime.now(timezone.utc)
+                await session.commit()
+                if event_queue is not None:
+                    await event_queue.put(("error", {"message": run.error}))
+                    await event_queue.put(
+                        (
+                            "run_completed",
+                            {
+                                "run_id": str(run.id),
+                                "status": run.status.value,
+                                "summary": run.summary_stats,
+                            },
+                        )
+                    )
+                    terminal_emitted = True
+                return
+
+            succeeded: dict[str, int] = {}
+            failed: list[str] = []
+            for label, result in zip(labels, results):
+                if isinstance(result, Exception):
+                    logger.exception(
+                        "extraction.extractor_failed",
+                        extra={"run_id": str(run.id), "extractor": label},
+                        exc_info=result,
+                    )
+                    failed.append(label)
+                    if event_queue is not None:
+                        await event_queue.put(
+                            (
+                                "error",
+                                {"extractor": label, "message": str(result)},
+                            )
+                        )
+                else:
+                    succeeded[label] = int(result)
+
+            if failed and not succeeded:
+                run.status = ExtractionRunStatus.FAILED
+                run.error = f"extractors failed: {', '.join(failed)}"
+            elif failed:
+                run.status = ExtractionRunStatus.PARTIAL
+                run.error = f"extractors partially failed: {', '.join(failed)}"
+            else:
+                run.status = ExtractionRunStatus.COMPLETED
+
+            run.summary_stats = {
+                "succeeded": succeeded,
+                "failed": failed,
+            }
             run.completed_at = datetime.now(timezone.utc)
             await session.commit()
+
             if event_queue is not None:
-                await event_queue.put(("error", {"message": run.error}))
                 await event_queue.put(
                     (
                         "run_completed",
@@ -466,54 +548,39 @@ async def run_extraction(
                         },
                     )
                 )
-                await event_queue.put(None)
-            return
-
-        succeeded: dict[str, int] = {}
-        failed: list[str] = []
-        for label, result in zip(labels, results):
-            if isinstance(result, Exception):
-                logger.exception(
-                    "extraction.extractor_failed",
-                    extra={"run_id": str(run.id), "extractor": label},
-                    exc_info=result,
-                )
-                failed.append(label)
-                if event_queue is not None:
-                    await event_queue.put(
-                        (
-                            "error",
-                            {"extractor": label, "message": str(result)},
-                        )
-                    )
-            else:
-                succeeded[label] = int(result)
-
-        if failed and not succeeded:
-            run.status = ExtractionRunStatus.FAILED
-            run.error = f"extractors failed: {', '.join(failed)}"
-        elif failed:
-            run.status = ExtractionRunStatus.PARTIAL
-            run.error = f"extractors partially failed: {', '.join(failed)}"
-        else:
-            run.status = ExtractionRunStatus.COMPLETED
-
-        run.summary_stats = {
-            "succeeded": succeeded,
-            "failed": failed,
-        }
-        run.completed_at = datetime.now(timezone.utc)
-        await session.commit()
-
-        if event_queue is not None:
+                terminal_emitted = True
+    except Exception:
+        logger.exception(
+            "extraction.run_unexpected_error", extra={"run_id": str(run_id)}
+        )
+        if event_queue is not None and not terminal_emitted:
+            await event_queue.put(
+                ("error", {"message": "internal error during extraction"})
+            )
             await event_queue.put(
                 (
                     "run_completed",
                     {
-                        "run_id": str(run.id),
-                        "status": run.status.value,
-                        "summary": run.summary_stats,
+                        "run_id": str(run_id),
+                        "status": ExtractionRunStatus.FAILED.value,
+                        "summary": None,
                     },
                 )
             )
+            terminal_emitted = True
+    finally:
+        if event_queue is not None:
+            if not terminal_emitted:
+                # No path emitted run_completed yet — push a final error so the
+                # client sees a consistent payload before we close the stream.
+                await event_queue.put(
+                    (
+                        "run_completed",
+                        {
+                            "run_id": str(run_id),
+                            "status": ExtractionRunStatus.FAILED.value,
+                            "summary": None,
+                        },
+                    )
+                )
             await event_queue.put(None)

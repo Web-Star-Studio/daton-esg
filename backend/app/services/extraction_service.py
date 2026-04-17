@@ -145,7 +145,22 @@ async def get_suggestion(
 
 
 def _ensure_list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
+    """Project JSONB columns are typed as ``dict | list | None``. The accept
+    path expects a list. None means "no entries yet"; a list is used as-is.
+    A dict-shaped column comes from a legacy/unknown ingestion and would be
+    silently overwritten otherwise — surface it as a 409 instead.
+    """
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=(
+            "Project field has unexpected shape; expected a list. "
+            "Refusing to overwrite existing structured data."
+        ),
+    )
 
 
 def _project_apply_material_topic(project: Project, payload: dict[str, Any]) -> None:
