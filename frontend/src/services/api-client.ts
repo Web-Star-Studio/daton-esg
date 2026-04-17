@@ -1,6 +1,18 @@
 import { refreshAuthTokens } from './amplify-auth'
 import type { AuthenticatedUser } from '../types/auth'
 import type {
+  BulkExtractionSuggestionInput,
+  BulkExtractionSuggestionResponse,
+  ExtractionRun,
+  ExtractionRunKind,
+  ExtractionStreamEvent,
+  ExtractionSuggestion,
+  ExtractionSuggestionList,
+  ExtractionSuggestionStatus,
+  ExtractionTargetKind,
+  UpdateExtractionSuggestionInput,
+} from '../types/extraction'
+import type {
   CreateProjectDocumentUploadInput,
   GriStandardRecord,
   IndicatorTemplateRecord,
@@ -873,4 +885,218 @@ export function uploadFileToPresignedUrl(
 
     request.send(file)
   })
+}
+
+// ---------------------------------------------------------------------------
+// Extraction (auto-fill of materiality + indicators from indexed documents)
+// ---------------------------------------------------------------------------
+
+export async function startExtractionRun(
+  projectId: string,
+  kind: ExtractionRunKind = 'both'
+) {
+  const response = await apiFetch(
+    `/api/v1/projects/${projectId}/extraction/runs`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind }),
+    }
+  )
+
+  if (!response.ok) {
+    throw await parseApiError(
+      response,
+      `Falha ao iniciar a extração (${response.status}).`
+    )
+  }
+
+  return (await response.json()) as ExtractionRun
+}
+
+export async function fetchExtractionRun(projectId: string, runId: string) {
+  const response = await apiFetch(
+    `/api/v1/projects/${projectId}/extraction/runs/${runId}`
+  )
+
+  if (!response.ok) {
+    throw await parseApiError(
+      response,
+      `Falha ao carregar a execução (${response.status}).`
+    )
+  }
+
+  return (await response.json()) as ExtractionRun
+}
+
+export async function listExtractionSuggestions(
+  projectId: string,
+  filters?: {
+    status?: ExtractionSuggestionStatus
+    kind?: ExtractionTargetKind
+    limit?: number
+    offset?: number
+  }
+) {
+  const query = new URLSearchParams()
+  if (filters?.status) query.set('status', filters.status)
+  if (filters?.kind) query.set('kind', filters.kind)
+  if (filters?.limit !== undefined) query.set('limit', String(filters.limit))
+  if (filters?.offset !== undefined) query.set('offset', String(filters.offset))
+
+  const suffix = query.size > 0 ? `?${query.toString()}` : ''
+  const response = await apiFetch(
+    `/api/v1/projects/${projectId}/extraction/suggestions${suffix}`
+  )
+
+  if (!response.ok) {
+    throw await parseApiError(
+      response,
+      `Falha ao carregar as sugestões (${response.status}).`
+    )
+  }
+
+  return (await response.json()) as ExtractionSuggestionList
+}
+
+export async function updateExtractionSuggestion(
+  projectId: string,
+  suggestionId: string,
+  payload: UpdateExtractionSuggestionInput
+) {
+  const response = await apiFetch(
+    `/api/v1/projects/${projectId}/extraction/suggestions/${suggestionId}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }
+  )
+
+  if (!response.ok) {
+    throw await parseApiError(
+      response,
+      `Falha ao atualizar a sugestão (${response.status}).`
+    )
+  }
+
+  return (await response.json()) as ExtractionSuggestion
+}
+
+export async function bulkUpdateExtractionSuggestions(
+  projectId: string,
+  payload: BulkExtractionSuggestionInput
+) {
+  const response = await apiFetch(
+    `/api/v1/projects/${projectId}/extraction/suggestions/bulk`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }
+  )
+
+  if (!response.ok) {
+    throw await parseApiError(
+      response,
+      `Falha ao processar sugestões em lote (${response.status}).`
+    )
+  }
+
+  return (await response.json()) as BulkExtractionSuggestionResponse
+}
+
+export type ExtractionStreamHandlers = {
+  onEvent?: (event: ExtractionStreamEvent) => void
+  onSuggestion?: (suggestion: ExtractionSuggestion) => void
+  onCompleted?: (data: ExtractionStreamEvent['data']) => void
+  onError?: (message: string) => void
+}
+
+function processExtractionSseChunk(
+  rawChunk: string,
+  handlers: ExtractionStreamHandlers
+) {
+  const normalized = rawChunk.replace(/\r/g, '')
+  const lines = normalized.split('\n')
+  let event = 'message'
+  const dataLines: string[] = []
+
+  for (const line of lines) {
+    if (line.startsWith('event:')) {
+      event = line.slice(6).trim()
+      continue
+    }
+    if (line.startsWith('data:')) {
+      dataLines.push(line.slice(5).trimStart())
+    }
+  }
+
+  if (dataLines.length === 0) return
+
+  const data = JSON.parse(dataLines.join('\n')) as Record<string, unknown>
+  const typed = { type: event, data } as unknown as ExtractionStreamEvent
+  handlers.onEvent?.(typed)
+
+  if (event === 'suggestion') {
+    handlers.onSuggestion?.(data as unknown as ExtractionSuggestion)
+  } else if (event === 'run_completed') {
+    handlers.onCompleted?.(data as ExtractionStreamEvent['data'])
+  } else if (event === 'error') {
+    handlers.onError?.(
+      (data as { message?: string }).message ?? 'Erro durante a extração.'
+    )
+  }
+}
+
+export async function streamExtractionRun(
+  projectId: string,
+  runId: string,
+  handlers: ExtractionStreamHandlers,
+  options?: { signal?: AbortSignal }
+) {
+  const response = await apiFetch(
+    `/api/v1/projects/${projectId}/extraction/runs/${runId}/stream`,
+    { signal: options?.signal }
+  )
+
+  if (!response.ok) {
+    throw await parseApiError(
+      response,
+      `Falha ao consumir o stream da extração (${response.status}).`
+    )
+  }
+
+  if (!response.body) {
+    throw new Error('O backend não retornou um stream válido.')
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { value, done } = await reader.read()
+    buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done })
+
+    let boundaryIndex = buffer.indexOf('\n\n')
+    while (boundaryIndex >= 0) {
+      const rawChunk = buffer.slice(0, boundaryIndex).trim()
+      buffer = buffer.slice(boundaryIndex + 2)
+
+      if (rawChunk) {
+        processExtractionSseChunk(rawChunk, handlers)
+      }
+
+      boundaryIndex = buffer.indexOf('\n\n')
+    }
+
+    if (done) {
+      const finalChunk = buffer.trim()
+      if (finalChunk) {
+        processExtractionSseChunk(finalChunk, handlers)
+      }
+      break
+    }
+  }
 }

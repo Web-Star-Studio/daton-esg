@@ -5,6 +5,7 @@ from fastapi import FastAPI
 
 from app.api.auth import router as auth_router
 from app.api.documents import router as documents_router
+from app.api.extraction import router as extraction_router
 from app.api.generation import router as generation_router
 from app.api.health import router as health_router
 from app.api.knowledge import router as knowledge_router
@@ -36,6 +37,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(auth_router)
     app.include_router(documents_router)
+    app.include_router(extraction_router)
     app.include_router(generation_router)
     app.include_router(health_router)
     app.include_router(knowledge_router)

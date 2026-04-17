@@ -67,11 +67,11 @@ After adding a new dependency while `pnpm dev` is running, clear Vite's optimize
 
 ### Backend (`backend/app/`)
 
-- **`main.py` — `create_app()` factory.** Composes the FastAPI app and mounts routers from `app/api/`. Tests build the app via `create_app()` and use `app.dependency_overrides` for `get_db_session` and `get_current_user` (pattern shown in `tests/test_api/test_generation.py`).
-- **`core/config.py` — `Settings` via `pydantic-settings`**, loaded from `.env` (monorepo root `../.env` is also read). `get_settings()` is `@lru_cache`'d. Key validators: `database_url` forces the `postgresql+asyncpg://` scheme and swaps `postgres` host for `localhost` when off-container; `aws_endpoint_url` does the same for `localstack`. Model config knobs: `openai_chat_model`, `report_generation_model`, `rag_*`, `agent_chat_*`.
-- **`core/database.py`, `core/security.py`** — async SQLAlchemy session factory and Cognito JWT validator. API routes authenticate via `Depends(get_current_user)`.
-- **`models/`** — SQLAlchemy 2.x mapped classes (`StrEnum`-based enums in `models/enums.py`). Cascades are relied upon; e.g. `Project.reports` uses `cascade="all, delete-orphan"`.
-- **`services/`** — all business logic (see Report Generation Pipeline below for the largest subsystem).
+- `**main.py` — `create_app()` factory.** Composes the FastAPI app and mounts routers from `app/api/`. Tests build the app via `create_app()` and use `app.dependency_overrides` for `get_db_session` and `get_current_user` (pattern shown in `tests/test_api/test_generation.py`).
+- `**core/config.py` — `Settings` via `pydantic-settings`**, loaded from `.env` (monorepo root `../.env` is also read). `get_settings()` is `@lru_cache`'d. Key validators: `database_url` forces the `postgresql+asyncpg://` scheme and swaps `postgres` host for `localhost` when off-container; `aws_endpoint_url` does the same for `localstack`. Model config knobs: `openai_chat_model`, `report_generation_model`, `rag_*`, `agent_chat_*`.
+- `**core/database.py`, `core/security.py`** — async SQLAlchemy session factory and Cognito JWT validator. API routes authenticate via `Depends(get_current_user)`.
+- `**models/**` — SQLAlchemy 2.x mapped classes (`StrEnum`-based enums in `models/enums.py`). Cascades are relied upon; e.g. `Project.reports` uses `cascade="all, delete-orphan"`.
+- `**services/**` — all business logic (see Report Generation Pipeline below for the largest subsystem).
 
 ### Report Generation Pipeline
 
@@ -133,7 +133,7 @@ Separate from report generation. The agent drawer is a project-scoped RAG chat a
 
 ### Auth
 
-AWS Cognito. Frontend reads `VITE_AWS_COGNITO_*`; backend reads `AWS_COGNITO_*` and validates JWTs in `core/security.py`. Tokens are stored in `localStorage` (Amplify default) with a proactive 10-min refresh interval in `AuthProvider`. The API client intercepts 401s and transparently refreshes before retrying.
+AWS Cognito. Frontend reads `VITE_AWS_COGNITO_`*; backend reads `AWS_COGNITO_`* and validates JWTs in `core/security.py`. Tokens are stored in `localStorage` (Amplify default) with a proactive 10-min refresh interval in `AuthProvider`. The API client intercepts 401s and transparently refreshes before retrying.
 
 ## Conventions and Gotchas
 
@@ -150,5 +150,5 @@ AWS Cognito. Frontend reads `VITE_AWS_COGNITO_*`; backend reads `AWS_COGNITO_*` 
   2. Report generation: per-section progress events via `asyncio.Queue`
   Both use `event: <name>\ndata: <json>\n\n` format. If you change events on the backend, update the corresponding frontend parser.
 - **Report generation requires materiality** — the pipeline reads `project.material_topics` and `project.indicator_values` (JSONB). Both must be populated before generating meaningful reports.
-- **Indicator Catalog v2** — `indicator_templates` rows carry `gri_code`, `group_key`, `kind` (`input` / `computed_sum` / `computed_pct`), and `display_order`. Only `input` rows accept user values; `computed_*` rows are UI-derived from their siblings sharing a `group_key`. Don't persist computed values — they're read-through. See migration `20260416_0014_indicator_catalog_v2.py` and the `test_indicator_catalog_v2.py` test.
+- **Indicator Catalog v2** — `indicator_templates` rows carry `gri_code`, `group_key`, `kind` (`input` / `computed_sum` / `computed_pct`), and `display_order`. Only `input` rows accept user values; `computed_`* rows are UI-derived from their siblings sharing a `group_key`. Don't persist computed values — they're read-through. See migration `20260416_0014_indicator_catalog_v2.py` and the `test_indicator_catalog_v2.py` test.
 

@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     report_max_section_ratio: float = 1.4
     report_phase1_max_concurrency: int = 5
     report_agent_timeout_seconds: int = 120
+    extraction_model: str | None = None
+    extraction_rag_top_k: int = 6
+    extraction_max_parallel_extractors: int = 2
+    extraction_per_topic_concurrency: int = 4
+    extraction_timeout_seconds: int = 300
     aws_cognito_region: str = "us-east-1"
     aws_cognito_user_pool_id: str = "us-east-1_example123"
     aws_cognito_app_client_id: str = "exampleclientid1234567890"
@@ -180,12 +185,22 @@ class Settings(BaseSettings):
         "report_rag_top_k",
         "report_phase1_max_concurrency",
         "report_agent_timeout_seconds",
+        "extraction_rag_top_k",
+        "extraction_max_parallel_extractors",
+        "extraction_per_topic_concurrency",
+        "extraction_timeout_seconds",
     )
     @classmethod
     def validate_positive_chat_settings(cls, value: int) -> int:
         if value <= 0:
             raise ValueError("Setting must be greater than zero")
         return value
+
+    @model_validator(mode="after")
+    def derive_extraction_model(self) -> "Settings":
+        if not self.extraction_model:
+            self.extraction_model = self.report_generation_model
+        return self
 
     @field_validator("agent_chat_min_score")
     @classmethod

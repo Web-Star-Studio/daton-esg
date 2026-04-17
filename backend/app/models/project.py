@@ -87,3 +87,13 @@ class Project(Base):
         "DocumentRagChunk",
         cascade="all, delete-orphan",
     )
+    extraction_runs = relationship(
+        "ExtractionRun",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+    extraction_suggestions = relationship(
+        "ExtractionSuggestion",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )

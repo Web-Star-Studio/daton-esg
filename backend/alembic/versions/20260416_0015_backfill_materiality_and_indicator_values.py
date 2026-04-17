@@ -120,9 +120,7 @@ def upgrade() -> None:
     connection = op.get_bind()
     rows = (
         connection.execute(
-            sa.text(
-                "SELECT id, material_topics, indicator_values FROM projects"
-            )
+            sa.text("SELECT id, material_topics, indicator_values FROM projects")
         )
         .mappings()
         .all()
@@ -145,9 +143,7 @@ def upgrade() -> None:
             set_clauses.append(f"{col} = CAST(:{col} AS JSONB)")
             params[col] = val
         connection.execute(
-            sa.text(
-                f"UPDATE projects SET {', '.join(set_clauses)} WHERE id = :id"
-            ),
+            sa.text(f"UPDATE projects SET {', '.join(set_clauses)} WHERE id = :id"),
             params,
         )
 
