@@ -10,6 +10,7 @@ from app.services.langgraph_report_graph import (
     _dispatcher_router,
     _extract_gri_evidence,
     _extract_inline_gri_codes,
+    _format_indicators,
     _has_enquadramento_block,
     _render_sumario_markdown,
     _strip_invalid_gri_parentheticals,
@@ -172,3 +173,104 @@ def test_dispatcher_router_done_when_index_exhausted() -> None:
         "section_templates": [_StubTemplate("narrative")] * 3,
     }
     assert _dispatcher_router(state) == "done"  # type: ignore[arg-type]
+
+
+# ---- indicator formatting ----
+
+
+def test_format_indicators_falls_back_to_flat_without_templates() -> None:
+    indicators = [
+        {
+            "tema": "Clima e Energia",
+            "indicador": "Emissões GEE — Escopo 1",
+            "unidade": "tCO₂e",
+            "value": "1200",
+        }
+    ]
+    rendered = _format_indicators(indicators)
+    assert "[Clima e Energia] Emissões GEE — Escopo 1: 1200 tCO₂e" in rendered
+
+
+def test_format_indicators_groups_and_computes_total_and_pct() -> None:
+    templates = [
+        {
+            "tema": "Clima e Energia",
+            "indicador": "Energia consumida — renovável",
+            "unidade": "kWh/ano",
+            "gri_code": "GRI 302-1",
+            "group_key": "energy_mix",
+            "kind": "input",
+            "display_order": 0,
+        },
+        {
+            "tema": "Clima e Energia",
+            "indicador": "Energia consumida — não-renovável",
+            "unidade": "kWh/ano",
+            "gri_code": "GRI 302-1",
+            "group_key": "energy_mix",
+            "kind": "input",
+            "display_order": 1,
+        },
+        {
+            "tema": "Clima e Energia",
+            "indicador": "Consumo total de energia",
+            "unidade": "kWh/ano",
+            "gri_code": "GRI 302-1",
+            "group_key": "energy_mix",
+            "kind": "computed_sum",
+            "display_order": 2,
+        },
+        {
+            "tema": "Clima e Energia",
+            "indicador": "% Energia renovável",
+            "unidade": "%",
+            "gri_code": "GRI 302-1",
+            "group_key": "energy_mix",
+            "kind": "computed_pct",
+            "display_order": 3,
+        },
+    ]
+    indicators = [
+        {
+            "tema": "Clima e Energia",
+            "indicador": "Energia consumida — renovável",
+            "unidade": "kWh/ano",
+            "value": "100",
+        },
+        {
+            "tema": "Clima e Energia",
+            "indicador": "Energia consumida — não-renovável",
+            "unidade": "kWh/ano",
+            "value": "300",
+        },
+    ]
+    rendered = _format_indicators(indicators, templates)
+    assert "[Clima e Energia]" in rendered
+    assert "Energia consumida — renovável (GRI 302-1): 100 kWh/ano" in rendered
+    assert "Consumo total de energia (computado, GRI 302-1): 400 kWh/ano" in rendered
+    assert "% Energia renovável (computado, GRI 302-1): 25 %" in rendered
+
+
+def test_format_indicators_skips_empty_groups() -> None:
+    templates = [
+        {
+            "tema": "Água",
+            "indicador": "Água captada — superficial",
+            "unidade": "m³/ano",
+            "gri_code": "GRI 303-3",
+            "group_key": "water_withdrawal",
+            "kind": "input",
+            "display_order": 0,
+        },
+        {
+            "tema": "Água",
+            "indicador": "Total captado",
+            "unidade": "m³/ano",
+            "gri_code": "GRI 303-3",
+            "group_key": "water_withdrawal",
+            "kind": "computed_sum",
+            "display_order": 1,
+        },
+    ]
+    rendered = _format_indicators([], templates)
+    assert "Nenhum indicador" in rendered

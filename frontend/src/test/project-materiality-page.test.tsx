@@ -5,6 +5,7 @@ import { ProjectWorkspaceLayout } from '../components/project-workspace-layout'
 import { useAuth } from '../hooks/use-auth'
 import { ProjectMaterialityPage } from '../pages/project-materiality-page'
 import {
+  fetchGriStandards,
   fetchOdsGoals,
   fetchProject,
   fetchProjects,
@@ -19,6 +20,7 @@ vi.mock('../services/api-client', () => ({
   createProjectGenerationThread: vi.fn(),
   deleteProjectGenerationThread: vi.fn(),
   fetchIndicatorTemplates: vi.fn(),
+  fetchGriStandards: vi.fn(),
   fetchOdsGoals: vi.fn(),
   fetchProject: vi.fn(),
   fetchProjectGenerationThread: vi.fn(),
@@ -31,6 +33,7 @@ vi.mock('../services/api-client', () => ({
 const mockUseAuth = vi.mocked(useAuth)
 const mockFetchProject = vi.mocked(fetchProject)
 const mockFetchProjects = vi.mocked(fetchProjects)
+const mockFetchGriStandards = vi.mocked(fetchGriStandards)
 const mockFetchOdsGoals = vi.mocked(fetchOdsGoals)
 const mockUpdateProject = vi.mocked(updateProject)
 
@@ -73,10 +76,28 @@ describe('ProjectMaterialityPage', () => {
     })
     mockFetchProject.mockReset()
     mockFetchProjects.mockReset()
+    mockFetchGriStandards.mockReset()
     mockFetchOdsGoals.mockReset()
     mockUpdateProject.mockReset()
     mockFetchProject.mockResolvedValue(baseProject)
     mockFetchProjects.mockResolvedValue([baseProject])
+    mockFetchGriStandards.mockResolvedValue([
+      {
+        code: 'GRI 301-1',
+        family: '300',
+        standard_text: 'Materiais utilizados por peso ou volume',
+      },
+      {
+        code: 'GRI 305-1',
+        family: '300',
+        standard_text: 'Emissões diretas de GEE (Escopo 1)',
+      },
+      {
+        code: 'GRI 401-1',
+        family: '400',
+        standard_text: 'Novas contratações de empregados e rotatividade',
+      },
+    ])
     mockFetchOdsGoals.mockResolvedValue([
       {
         ods_number: 7,
@@ -111,7 +132,7 @@ describe('ProjectMaterialityPage', () => {
     )
   }
 
-  it('renders pillars and topics from the static catalog', async () => {
+  it('renders pillars and GRI disclosures from the reference API', async () => {
     renderPage()
 
     expect(
@@ -122,18 +143,22 @@ describe('ProjectMaterialityPage', () => {
     ).toBeInTheDocument()
 
     await waitFor(() => {
-      expect(screen.getByText('Descarbonização e GEE')).toBeInTheDocument()
+      expect(mockFetchGriStandards).toHaveBeenCalled()
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('GRI 301-1')).toBeInTheDocument()
       expect(
-        screen.getByText('Diversidade, Equidade e Inclusão (DEI)')
+        screen.getByText('Materiais utilizados por peso ou volume')
       ).toBeInTheDocument()
-      expect(
-        screen.getByText('Ética, Anticorrupção e Compliance')
-      ).toBeInTheDocument()
+      expect(screen.getByText('GRI 401-1')).toBeInTheDocument()
     })
   })
 
   it('renders ODS cards fetched from the reference API', async () => {
     renderPage()
+
+    fireEvent.click(await screen.findByRole('tab', { name: /^ODS$/i }))
 
     await waitFor(() => {
       expect(screen.getByText('ODS 7')).toBeInTheDocument()
@@ -146,17 +171,19 @@ describe('ProjectMaterialityPage', () => {
     renderPage()
 
     await waitFor(() => {
-      expect(screen.getByText('Descarbonização e GEE')).toBeInTheDocument()
+      expect(screen.getByText('GRI 305-1')).toBeInTheDocument()
     })
 
-    const topicCheckbox = screen.getByRole('checkbox', {
-      name: /descarbonização e gee/i,
-    })
+    const topicCheckbox = screen.getByRole('checkbox', { name: /gri 305-1/i })
     fireEvent.click(topicCheckbox)
 
     await waitFor(() => {
       expect(topicCheckbox).toBeChecked()
     })
+
+    fireEvent.click(screen.getByRole('button', { name: /^alta$/i }))
+
+    fireEvent.click(screen.getByRole('tab', { name: /^ODS$/i }))
 
     fireEvent.click(
       screen.getByRole('checkbox', { name: /ods 7.*energia limpa/i })
@@ -171,7 +198,7 @@ describe('ProjectMaterialityPage', () => {
     const call = mockUpdateProject.mock.calls[0]
     expect(call[0]).toBe('project-1')
     expect(call[1].material_topics).toEqual([
-      { pillar: 'E', topic: 'Descarbonização e GEE', priority: 3 },
+      { pillar: 'E', topic: 'GRI 305-1', priority: 'alta' },
     ])
     expect(call[1].sdg_goals).toEqual([
       {

@@ -190,7 +190,9 @@ def test_generate_report_conflict_when_already_running(
     app, _session, user = reports_app
     project = _make_project(
         user,
-        material_topics=[{"pillar": "E", "topic": "Clima e Energia", "priority": 4}],
+        material_topics=[
+            {"pillar": "E", "topic": "GRI 305-1", "priority": "alta"},
+        ],
     )
 
     async def fake_get_project_for_user(_session, _pid, _uid):
@@ -251,7 +253,9 @@ def test_generate_report_streams_sse(monkeypatch, reports_app) -> None:
     app, _session, user = reports_app
     project = _make_project(
         user,
-        material_topics=[{"pillar": "E", "topic": "Clima e Energia", "priority": 4}],
+        material_topics=[
+            {"pillar": "E", "topic": "GRI 305-1", "priority": "alta"},
+        ],
     )
     report = _make_report(project, status=ReportStatus.GENERATING)
 

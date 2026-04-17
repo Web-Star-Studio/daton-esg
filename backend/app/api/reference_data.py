@@ -53,7 +53,9 @@ async def list_indicator_templates(
 ) -> list[IndicatorTemplateResponse]:
     result = await session.execute(
         select(IndicatorTemplate).order_by(
-            IndicatorTemplate.tema, IndicatorTemplate.indicador
+            IndicatorTemplate.tema,
+            IndicatorTemplate.display_order,
+            IndicatorTemplate.indicador,
         )
     )
     return [IndicatorTemplateResponse.model_validate(row) for row in result.scalars()]

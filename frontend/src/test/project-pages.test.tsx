@@ -10,11 +10,13 @@ import { ProjectIndicatorsPage } from '../pages/project-indicators-page'
 import { useAuth } from '../hooks/use-auth'
 import {
   createProject,
+  fetchIndicatorTemplates,
   fetchProject,
   fetchProjectDocuments,
   fetchProjects,
   updateProject,
 } from '../services/api-client'
+import type { IndicatorTemplateRecord } from '../types/project'
 
 vi.mock('../hooks/use-auth', () => ({
   useAuth: vi.fn(),
@@ -41,6 +43,46 @@ const mockFetchProject = vi.mocked(fetchProject)
 const mockFetchProjectDocuments = vi.mocked(fetchProjectDocuments)
 const mockCreateProject = vi.mocked(createProject)
 const mockUpdateProject = vi.mocked(updateProject)
+const mockFetchIndicatorTemplates = vi.mocked(fetchIndicatorTemplates)
+
+const energyMixTemplates: IndicatorTemplateRecord[] = [
+  {
+    tema: 'Clima e Energia',
+    indicador: 'Energia consumida — renovável',
+    unidade: 'kWh/ano',
+    gri_code: 'GRI 302-1',
+    group_key: 'energy_mix',
+    kind: 'input',
+    display_order: 0,
+  },
+  {
+    tema: 'Clima e Energia',
+    indicador: 'Energia consumida — não-renovável',
+    unidade: 'kWh/ano',
+    gri_code: 'GRI 302-1',
+    group_key: 'energy_mix',
+    kind: 'input',
+    display_order: 1,
+  },
+  {
+    tema: 'Clima e Energia',
+    indicador: 'Consumo total de energia',
+    unidade: 'kWh/ano',
+    gri_code: 'GRI 302-1',
+    group_key: 'energy_mix',
+    kind: 'computed_sum',
+    display_order: 2,
+  },
+  {
+    tema: 'Clima e Energia',
+    indicador: '% Energia renovável',
+    unidade: '%',
+    gri_code: 'GRI 302-1',
+    group_key: 'energy_mix',
+    kind: 'computed_pct',
+    display_order: 3,
+  },
+]
 
 const baseProject = {
   id: 'project-1',
@@ -90,6 +132,8 @@ describe('project pages', () => {
     mockFetchProjectDocuments.mockReset()
     mockCreateProject.mockReset()
     mockUpdateProject.mockReset()
+    mockFetchIndicatorTemplates.mockReset()
+    mockFetchIndicatorTemplates.mockResolvedValue([])
   })
 
   it('renders the projects dashboard with fetched projects', async () => {
@@ -332,5 +376,91 @@ describe('project pages', () => {
         screen.getByRole('heading', { name: /indicadores esg/i })
       ).toBeInTheDocument()
     })
+  })
+
+  it('renders GRI badge, computes sum/pct read-only and ignores legacy indicator_values', async () => {
+    mockFetchProject.mockResolvedValue({
+      ...baseProject,
+      indicator_values: [
+        // This legacy name is not in the new catalog and must be silently dropped.
+        {
+          tema: 'Clima e Energia',
+          indicador: 'Consumo total de energia (legacy v1 name)',
+          unidade: 'kWh/ano',
+          value: '999',
+        },
+      ],
+    })
+    mockFetchProjects.mockResolvedValue([baseProject])
+    mockFetchIndicatorTemplates.mockResolvedValue(energyMixTemplates)
+    mockUpdateProject.mockResolvedValue(baseProject)
+
+    render(
+      <MemoryRouter initialEntries={['/projects/project-1/indicators']}>
+        <Routes>
+          <Route
+            path="/projects/:projectId"
+            element={<ProjectWorkspaceLayout />}
+          >
+            <Route path="indicators" element={<ProjectIndicatorsPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    )
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /clima e energia/i })
+    )
+
+    expect(await screen.findAllByText(/GRI 302-1/)).not.toHaveLength(0)
+
+    const totalInput = screen.getByLabelText(
+      'Consumo total de energia'
+    ) as HTMLInputElement
+    expect(totalInput).toHaveAttribute('readonly')
+    expect(totalInput.value).toBe('—')
+
+    fireEvent.change(screen.getByLabelText('Energia consumida — renovável'), {
+      target: { value: '100' },
+    })
+    fireEvent.change(
+      screen.getByLabelText('Energia consumida — não-renovável'),
+      { target: { value: '300' } }
+    )
+
+    await waitFor(() => {
+      expect(
+        (screen.getByLabelText('Consumo total de energia') as HTMLInputElement)
+          .value
+      ).toBe('400')
+    })
+
+    const pctInput = screen.getByLabelText(
+      '% Energia renovável'
+    ) as HTMLInputElement
+    expect(pctInput).toHaveAttribute('readonly')
+    expect(pctInput.value).toBe('25')
+
+    fireEvent.click(screen.getByRole('button', { name: /salvar/i }))
+
+    await waitFor(() => {
+      expect(mockUpdateProject).toHaveBeenCalledTimes(1)
+    })
+
+    const [, payload] = mockUpdateProject.mock.calls[0]
+    expect(payload.indicator_values).toEqual([
+      {
+        tema: 'Clima e Energia',
+        indicador: 'Energia consumida — renovável',
+        unidade: 'kWh/ano',
+        value: '100',
+      },
+      {
+        tema: 'Clima e Energia',
+        indicador: 'Energia consumida — não-renovável',
+        unidade: 'kWh/ano',
+        value: '300',
+      },
+    ])
   })
 })

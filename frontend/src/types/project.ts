@@ -1,9 +1,12 @@
-export type MaterialTopicPillar = 'E' | 'S' | 'G'
+export type MaterialTopicPillar = 'E' | 'S'
+
+export type MaterialTopicPriority = 'alta' | 'media' | 'baixa'
 
 export type MaterialTopic = {
   pillar: MaterialTopicPillar
+  /** GRI disclosure code, e.g. "GRI 301-1" */
   topic: string
-  priority: number
+  priority: MaterialTopicPriority
 }
 
 export type SdgSelection = {
@@ -70,10 +73,16 @@ export type OdsGoalRecord = {
   metas: OdsMetaRecord[]
 }
 
+export type IndicatorTemplateKind = 'input' | 'computed_sum' | 'computed_pct'
+
 export type IndicatorTemplateRecord = {
   tema: string
   indicador: string
   unidade: string
+  gri_code: string | null
+  group_key: string | null
+  kind: IndicatorTemplateKind
+  display_order: number
 }
 
 export type ReportStatus =

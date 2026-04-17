@@ -44,7 +44,7 @@ def _make_context() -> PipelineContext:
         org_name="Test Org",
         base_year=2025,
         status=ProjectStatus.COLLECTING,
-        material_topics=[{"pillar": "E", "topic": "Clima", "priority": 4}],
+        material_topics=[{"pillar": "E", "topic": "GRI 305-1", "priority": "alta"}],
         sdg_goals=[],
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
@@ -66,7 +66,7 @@ def _make_context() -> PipelineContext:
             "GRI 305-1": "Emissoes escopo 1",
             "GRI 302-1": "Consumo de energia",
         },
-        material_topics=[{"pillar": "E", "topic": "Clima", "priority": 4}],
+        material_topics=[{"pillar": "E", "topic": "GRI 305-1", "priority": "alta"}],
         sdg_goals=[],
         project_indicators=None,
     )
