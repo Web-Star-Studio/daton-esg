@@ -440,9 +440,14 @@ async def _run_agent_inner(
     user_prompt = _build_user_prompt(state)
 
     # --- generate ---
+    effective_temperature = (
+        profile.temperature_override
+        if profile.temperature_override is not None
+        else settings.report_generation_temperature
+    )
     llm = ChatOpenAI(
         model=settings.report_generation_model,
-        temperature=settings.report_generation_temperature,
+        temperature=effective_temperature,
         max_completion_tokens=settings.report_generation_max_output_tokens,
         api_key=(
             settings.openai_api_key.get_secret_value()
@@ -614,7 +619,7 @@ async def _run_agent_inner(
         total_tokens=int(usage.get("total_tokens", 0) or 0),
         latency_ms=elapsed_ms,
         model_id=settings.report_generation_model,
-        temperature=settings.report_generation_temperature,
+        temperature=effective_temperature,
         started_at=started_at,
         completed_at=completed_at,
     )

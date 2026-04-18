@@ -27,6 +27,7 @@ class SectionAgentProfile:
     domain_addendum: str
     output_structure_hint: str
     style_nuance: str
+    temperature_override: float | None = None
 
 
 def build_agent_system_prompt(profile: SectionAgentProfile) -> str:
@@ -76,6 +77,7 @@ SECTION_AGENT_PROFILES: dict[str, SectionAgentProfile] = {
             "clareza executiva, densidade informacional e verbos como constituir, "
             "atuar, operar, abranger e atender."
         ),
+        temperature_override=0.2,
     ),
     "visao-estrategia": SectionAgentProfile(
         section_key="visao-estrategia",
@@ -104,6 +106,7 @@ SECTION_AGENT_PROFILES: dict[str, SectionAgentProfile] = {
             "aspiracional sem evidencia. Se o compromisso e generico e sem meta, "
             "declare a limitacao."
         ),
+        temperature_override=0.2,
     ),
     "governanca": SectionAgentProfile(
         section_key="governanca",
@@ -133,6 +136,7 @@ SECTION_AGENT_PROFILES: dict[str, SectionAgentProfile] = {
             "'objetivo declarado'. Cuidado especial com afirmacoes de "
             "conformidade — somente com evidencia documental."
         ),
+        temperature_override=0.2,
     ),
     "gestao-ambiental": SectionAgentProfile(
         section_key="gestao-ambiental",
@@ -245,6 +249,7 @@ SECTION_AGENT_PROFILES: dict[str, SectionAgentProfile] = {
             "Relacional e descritivo. Evite marketing — descreva canais e "
             "resultados, nao aspiracoes."
         ),
+        temperature_override=0.2,
     ),
     "inovacao": SectionAgentProfile(
         section_key="inovacao",
@@ -269,6 +274,7 @@ SECTION_AGENT_PROFILES: dict[str, SectionAgentProfile] = {
             "Descritivo e concreto. Foque em o que foi implementado, nao em "
             "o que se planeja. Se o projeto esta em andamento, declare o estagio."
         ),
+        temperature_override=0.2,
     ),
     "auditorias": SectionAgentProfile(
         section_key="auditorias",
@@ -294,6 +300,7 @@ SECTION_AGENT_PROFILES: dict[str, SectionAgentProfile] = {
             "Tecnico e objetivo. Auditorias sao factuais — reporte resultados, "
             "nao intencoes. Se nao houve auditoria, declare explicitamente."
         ),
+        temperature_override=0.2,
     ),
     "comunicacao": SectionAgentProfile(
         section_key="comunicacao",
@@ -318,6 +325,7 @@ SECTION_AGENT_PROFILES: dict[str, SectionAgentProfile] = {
             "foque em mecanismos de transparencia, nao em campanhas "
             "institucionais."
         ),
+        temperature_override=0.2,
     ),
     # ---- Phase 2: dependent sections (11-13) ----
     "temas-materiais": SectionAgentProfile(
@@ -347,6 +355,7 @@ SECTION_AGENT_PROFILES: dict[str, SectionAgentProfile] = {
             "relatorio GRI — mostre rigor no processo. Se o processo foi "
             "simplificado (sem pesquisa formal), declare honestamente."
         ),
+        temperature_override=0.2,
     ),
     "plano-acao": SectionAgentProfile(
         section_key="plano-acao",
@@ -401,6 +410,7 @@ SECTION_AGENT_PROFILES: dict[str, SectionAgentProfile] = {
             "— cite-as explicitamente. Tome cuidado com ODS-washing: nao "
             "atribua impacto sem dados."
         ),
+        temperature_override=0.2,
     ),
     # ---- Phase 3: deterministic (no LLM) ----
     "sumario-gri": SectionAgentProfile(

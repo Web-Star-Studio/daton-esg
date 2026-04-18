@@ -70,3 +70,52 @@ def test_prompt_length_is_reasonable() -> None:
         assert 500 < word_count < 1200, (
             f"Profile {key}: prompt has {word_count} words — out of expected range"
         )
+
+
+NARRATIVE_SECTIONS = frozenset(
+    {
+        "a-empresa",
+        "visao-estrategia",
+        "governanca",
+        "stakeholders",
+        "inovacao",
+        "auditorias",
+        "comunicacao",
+        "temas-materiais",
+        "alinhamento-ods",
+    }
+)
+QUANTITATIVE_SECTIONS = frozenset(
+    {
+        "gestao-ambiental",
+        "desempenho-social",
+        "desempenho-economico",
+        "plano-acao",
+        "sumario-gri",
+    }
+)
+
+
+def test_narrative_sections_have_temperature_override() -> None:
+    for key in NARRATIVE_SECTIONS:
+        profile = SECTION_AGENT_PROFILES[key]
+        assert profile.temperature_override == 0.2, (
+            f"Profile {key}: expected temperature_override=0.2, "
+            f"got {profile.temperature_override}"
+        )
+
+
+def test_quantitative_sections_have_no_temperature_override() -> None:
+    for key in QUANTITATIVE_SECTIONS:
+        profile = SECTION_AGENT_PROFILES[key]
+        assert profile.temperature_override is None, (
+            f"Profile {key}: expected temperature_override=None "
+            f"(inherits global), got {profile.temperature_override}"
+        )
+
+
+def test_temperature_override_partition_covers_all_profiles() -> None:
+    assert NARRATIVE_SECTIONS.isdisjoint(QUANTITATIVE_SECTIONS)
+    assert NARRATIVE_SECTIONS | QUANTITATIVE_SECTIONS == set(
+        SECTION_AGENT_PROFILES.keys()
+    )
