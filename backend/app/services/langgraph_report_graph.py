@@ -477,9 +477,8 @@ def _classify_chunk_bucket(content: str) -> str:
     Strong numeric signal (≥2 quantitative hits) wins over everything.
     Otherwise: any policy signal > single numeric signal > factual > context.
     """
-    numeric_hits = (
-        len(_RE_NUMERIC_WITH_UNIT.findall(content))
-        + len(_RE_GRI_INLINE.findall(content))
+    numeric_hits = len(_RE_NUMERIC_WITH_UNIT.findall(content)) + len(
+        _RE_GRI_INLINE.findall(content)
     )
     policy_hits = len(_RE_POLICY_LEMMA.findall(content))
     factual_hits = (

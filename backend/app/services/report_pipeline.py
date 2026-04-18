@@ -370,18 +370,23 @@ async def _run_agent_inner(
     event_queue: asyncio.Queue[SSEEvent | None],
     started: float,
     started_at: str,
+    retry_count: int = 0,
 ) -> AgentResult:
     from langchain_openai import ChatOpenAI
 
     settings = ctx.settings
 
+    top_k_target = (
+        settings.report_sparse_retry_top_k
+        if retry_count >= 1
+        else settings.report_rag_top_k
+    )
+
     # --- retrieve ---
     async with SessionLocal() as session:
         project_chunks = []
         seen_ids: set[str] = set()
-        per_query_top_k = max(
-            3, settings.report_rag_top_k // max(1, len(template.rag_queries))
-        )
+        per_query_top_k = max(3, top_k_target // max(1, len(template.rag_queries)))
         for query in template.rag_queries:
             for directory_key in template.directory_keys or (None,):
                 try:
@@ -403,7 +408,7 @@ async def _run_agent_inner(
                         seen_ids.add(cid)
                         project_chunks.append(chunk)
         project_chunks.sort(key=lambda c: c.score, reverse=True)
-        project_chunks = project_chunks[: settings.report_rag_top_k]
+        project_chunks = project_chunks[:top_k_target]
 
     reference_chunks = []
     if template.prompt_strategy not in ("ods_alignment", "gri_summary"):
@@ -562,6 +567,38 @@ async def _run_agent_inner(
     status = "completed"
     if word_count < min_target:
         status = "sparse_data"
+        if retry_count == 0 and settings.report_sparse_retry_enabled:
+            logger.info(
+                "report.agent_sparse_retry",
+                extra={
+                    "section": template.key,
+                    "word_count": word_count,
+                    "min_target": min_target,
+                    "retry_top_k": settings.report_sparse_retry_top_k,
+                },
+            )
+            await event_queue.put(
+                SSEEvent(
+                    event_type="section_retrying",
+                    data={
+                        "section_key": template.key,
+                        "word_count": word_count,
+                        "target_words": target,
+                        "reason": "sparse_data",
+                        "retry_top_k": settings.report_sparse_retry_top_k,
+                    },
+                )
+            )
+            return await _run_agent_inner(
+                template=template,
+                profile=profile,
+                ctx=ctx,
+                prior_sections_summary=prior_sections_summary,
+                event_queue=event_queue,
+                started=time.monotonic(),
+                started_at=datetime.now(timezone.utc).isoformat(),
+                retry_count=retry_count + 1,
+            )
         new_gaps.append(
             _build_gap(
                 section_key=template.key,

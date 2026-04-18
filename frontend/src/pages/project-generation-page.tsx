@@ -627,6 +627,15 @@ export function ProjectGenerationPage() {
               )
             )
           },
+          onSectionRetrying: (data) => {
+            setPipeline((current) =>
+              current.map((entry) =>
+                entry.key === data.section_key
+                  ? { ...entry, state: 'running', streamingText: '' }
+                  : entry
+              )
+            )
+          },
           onSectionCompleted: (data) => {
             setPipeline((current) =>
               current.map((entry) =>

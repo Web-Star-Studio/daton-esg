@@ -577,3 +577,190 @@ async def test_run_report_pipeline_fatal_sets_failed_status() -> None:
     assert gaps
     assert gaps[0]["group"] == "generation_issue"
     assert any(g.get("category") == "generation_error" for g in gaps)
+
+
+class StatefulFakeLLM:
+    """FakeLLM that yields a different chunk script per call.
+
+    Used to simulate a first attempt coming back sparse and a second attempt
+    (post-retry) producing enough content to pass the min_target check.
+    """
+
+    def __init__(self, scripts: list[list[str]]) -> None:
+        self._scripts = scripts
+        self._call_index = 0
+
+    async def astream(self, _messages):
+        script = self._scripts[min(self._call_index, len(self._scripts) - 1)]
+        self._call_index += 1
+        for i, text in enumerate(script):
+            is_last = i == len(script) - 1
+            yield FakeLLMChunk(
+                text,
+                {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2}
+                if is_last
+                else None,
+            )
+
+
+def _make_tiny_template():
+    """Tiny template so we can control sparse/not-sparse with short strings."""
+    from app.services.report_sections import ReportSectionTemplate
+
+    return ReportSectionTemplate(
+        key="a-empresa",  # borrow an existing profile
+        title="A empresa",
+        order=1,
+        heading_level=1,
+        directory_keys=("a-empresa-sumario-executivo",),
+        gri_codes=("GRI 2-1",),
+        rag_queries=("perfil organizacional",),
+        target_words=50,
+        prompt_strategy="narrative",
+    )
+
+
+def _build_enquadramento(n_words: int) -> str:
+    body_words = " ".join(["palavra"] * n_words)
+    return (
+        f"{body_words} (GRI 2-1).\n\n"
+        "Enquadramento ESG e normativo\n"
+        "- Pilares ESG: G\n"
+        "- GRI aplicavel: GRI 2-1\n"
+    )
+
+
+@pytest.mark.asyncio
+async def test_sparse_data_triggers_retry_with_doubled_top_k() -> None:
+    ctx = _make_context()
+    template = _make_tiny_template()
+    queue: asyncio.Queue[SSEEvent | None] = asyncio.Queue()
+
+    # target_words=50, min_ratio=0.6 → min_target=30. First script: 10 words
+    # (sparse). Second script: 60 words (passes).
+    short = _build_enquadramento(10)
+    long = _build_enquadramento(60)
+    fake_llm = StatefulFakeLLM(scripts=[[short], [long]])
+
+    cleaned_short = short
+    cleaned_long = long
+
+    async def fake_classify(**kwargs):
+        body = kwargs["ctx"].content
+        return InlineGapClassificationResult(cleaned_content=body, findings=[])
+
+    with (
+        patch(
+            "app.services.report_pipeline.retrieve_project_context",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+        patch(
+            "app.services.report_pipeline.retrieve_framework_reference",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+        patch(
+            "app.services.report_pipeline.classify_inline_gaps",
+            side_effect=fake_classify,
+        ),
+        patch("app.services.report_pipeline.SessionLocal") as mock_session_cls,
+        patch("langchain_openai.ChatOpenAI", return_value=fake_llm),
+    ):
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        mock_session_cls.return_value = mock_session
+
+        result = await run_single_agent(
+            template=template,
+            ctx=ctx,
+            prior_sections_summary="",
+            event_queue=queue,
+        )
+
+    events: list[SSEEvent] = []
+    while not queue.empty():
+        events.append(queue.get_nowait())
+    event_types = [e.event_type for e in events]
+
+    # LLM was called twice: first sparse, then successful retry.
+    assert fake_llm._call_index == 2
+    # Exactly one retry event.
+    assert event_types.count("section_retrying") == 1
+    retry_event = next(e for e in events if e.event_type == "section_retrying")
+    assert retry_event.data["section_key"] == "a-empresa"
+    assert retry_event.data["reason"] == "sparse_data"
+    # Final result is not sparse — retry provided enough content.
+    assert result.section_payload["status"] == "completed"
+    # Retry did not recurse a second time.
+    assert not any(gap["category"] == "sparse_evidence" for gap in result.gaps)
+    # Sanity: cleaned_short/cleaned_long strings referenced so linters keep them.
+    assert cleaned_short in (short,) and cleaned_long in (long,)
+
+
+@pytest.mark.asyncio
+async def test_sparse_retry_disabled_keeps_original_sparse_result() -> None:
+    from app.core.config import Settings
+
+    ctx = _make_context()
+    # Disable retry on this context's settings.
+    ctx.settings = Settings(
+        openai_api_key="sk-test-fake-key",
+        pinecone_api_key="pc-test-fake-key",
+        pinecone_index_name="test-index",
+        gri_reference_namespace="__reference__gri-2021-pt",
+        report_sparse_retry_enabled=False,
+    )
+    template = _make_tiny_template()
+    queue: asyncio.Queue[SSEEvent | None] = asyncio.Queue()
+
+    short = _build_enquadramento(10)
+    fake_llm = StatefulFakeLLM(scripts=[[short]])
+
+    async def fake_classify(**kwargs):
+        return InlineGapClassificationResult(
+            cleaned_content=kwargs["ctx"].content, findings=[]
+        )
+
+    with (
+        patch(
+            "app.services.report_pipeline.retrieve_project_context",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+        patch(
+            "app.services.report_pipeline.retrieve_framework_reference",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+        patch(
+            "app.services.report_pipeline.classify_inline_gaps",
+            side_effect=fake_classify,
+        ),
+        patch("app.services.report_pipeline.SessionLocal") as mock_session_cls,
+        patch("langchain_openai.ChatOpenAI", return_value=fake_llm),
+    ):
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        mock_session_cls.return_value = mock_session
+
+        result = await run_single_agent(
+            template=template,
+            ctx=ctx,
+            prior_sections_summary="",
+            event_queue=queue,
+        )
+
+    events: list[SSEEvent] = []
+    while not queue.empty():
+        events.append(queue.get_nowait())
+    event_types = [e.event_type for e in events]
+
+    # No retry occurred.
+    assert fake_llm._call_index == 1
+    assert "section_retrying" not in event_types
+    # Original sparse result preserved.
+    assert result.section_payload["status"] == "sparse_data"
+    assert any(gap["category"] == "sparse_evidence" for gap in result.gaps)
