@@ -30,8 +30,13 @@ from app.services.report_pipeline import (
 from app.services.report_sections import REPORT_SECTIONS
 
 
-def _make_context() -> PipelineContext:
-    """Create a minimal PipelineContext with faked project."""
+def _make_context(**settings_overrides) -> PipelineContext:
+    """Create a minimal PipelineContext with faked project.
+
+    ``settings_overrides`` are forwarded to ``Settings(...)`` so tests can
+    toggle flags like ``report_sparse_retry_enabled`` without mutating an
+    already-constructed PipelineContext.
+    """
     from datetime import datetime, timezone
 
     from app.core.config import Settings
@@ -55,6 +60,7 @@ def _make_context() -> PipelineContext:
         pinecone_api_key="pc-test-fake-key",
         pinecone_index_name="test-index",
         gri_reference_namespace="__reference__gri-2021-pt",
+        **settings_overrides,
     )
     return PipelineContext(
         project=project,
@@ -101,7 +107,8 @@ class FakeLLM:
 
 @pytest.mark.asyncio
 async def test_run_single_agent_success() -> None:
-    ctx = _make_context()
+    # Disable sparse retry so this test measures a single-attempt audit.
+    ctx = _make_context(report_sparse_retry_enabled=False)
     template = _get_template("a-empresa")
     queue: asyncio.Queue[SSEEvent | None] = asyncio.Queue()
 
@@ -425,7 +432,8 @@ async def test_run_single_agent_removes_inline_gap_diagnostics() -> None:
 async def test_audit_trail_captures_rag_metadata() -> None:
     from app.schemas.knowledge import RetrievedKnowledgeChunk
 
-    ctx = _make_context()
+    # Disable sparse retry so the audit fixture reflects one call, not two.
+    ctx = _make_context(report_sparse_retry_enabled=False)
     template = _get_template("gestao-ambiental")
     queue: asyncio.Queue[SSEEvent | None] = asyncio.Queue()
 
@@ -695,23 +703,19 @@ async def test_sparse_data_triggers_retry_with_doubled_top_k() -> None:
     assert result.section_payload["status"] == "completed"
     # Retry did not recurse a second time.
     assert not any(gap["category"] == "sparse_evidence" for gap in result.gaps)
+    # Audit trail must accumulate usage across BOTH attempts (each script emits
+    # usage {1,1,2} on its last chunk).
+    assert result.audit is not None
+    assert result.audit.prompt_tokens == 2  # 1 per attempt × 2 attempts
+    assert result.audit.completion_tokens == 2
+    assert result.audit.total_tokens == 4
     # Sanity: cleaned_short/cleaned_long strings referenced so linters keep them.
     assert cleaned_short in (short,) and cleaned_long in (long,)
 
 
 @pytest.mark.asyncio
 async def test_sparse_retry_disabled_keeps_original_sparse_result() -> None:
-    from app.core.config import Settings
-
-    ctx = _make_context()
-    # Disable retry on this context's settings.
-    ctx.settings = Settings(
-        openai_api_key="sk-test-fake-key",
-        pinecone_api_key="pc-test-fake-key",
-        pinecone_index_name="test-index",
-        gri_reference_namespace="__reference__gri-2021-pt",
-        report_sparse_retry_enabled=False,
-    )
+    ctx = _make_context(report_sparse_retry_enabled=False)
     template = _make_tiny_template()
     queue: asyncio.Queue[SSEEvent | None] = asyncio.Queue()
 

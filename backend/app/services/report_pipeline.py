@@ -371,10 +371,15 @@ async def _run_agent_inner(
     started: float,
     started_at: str,
     retry_count: int = 0,
+    usage_totals: dict[str, int] | None = None,
 ) -> AgentResult:
     from langchain_openai import ChatOpenAI
 
     settings = ctx.settings
+
+    accumulated_usage: dict[str, int] = dict(
+        usage_totals or {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+    )
 
     top_k_target = (
         settings.report_sparse_retry_top_k
@@ -487,6 +492,11 @@ async def _run_agent_inner(
 
     content = "".join(content_parts)
 
+    for key in ("input_tokens", "output_tokens", "total_tokens"):
+        accumulated_usage[key] = accumulated_usage.get(key, 0) + int(
+            usage.get(key, 0) or 0
+        )
+
     # --- validate ---
     new_gaps: list[dict[str, Any]] = []
 
@@ -595,9 +605,10 @@ async def _run_agent_inner(
                 ctx=ctx,
                 prior_sections_summary=prior_sections_summary,
                 event_queue=event_queue,
-                started=time.monotonic(),
-                started_at=datetime.now(timezone.utc).isoformat(),
+                started=started,
+                started_at=started_at,
                 retry_count=retry_count + 1,
+                usage_totals=accumulated_usage,
             )
         new_gaps.append(
             _build_gap(
@@ -651,9 +662,9 @@ async def _run_agent_inner(
         ],
         gri_codes_assigned=list(template.gri_codes),
         gri_codes_produced=gri_used,
-        prompt_tokens=int(usage.get("input_tokens", 0) or 0),
-        completion_tokens=int(usage.get("output_tokens", 0) or 0),
-        total_tokens=int(usage.get("total_tokens", 0) or 0),
+        prompt_tokens=accumulated_usage.get("input_tokens", 0),
+        completion_tokens=accumulated_usage.get("output_tokens", 0),
+        total_tokens=accumulated_usage.get("total_tokens", 0),
         latency_ms=elapsed_ms,
         model_id=settings.report_generation_model,
         temperature=effective_temperature,

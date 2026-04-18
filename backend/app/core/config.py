@@ -78,6 +78,14 @@ class Settings(BaseSettings):
         )
         if self.rag_chunk_overlap_chars >= self.rag_chunk_size_chars:
             raise ValueError("rag_chunk_overlap_chars must be smaller than chunk size")
+        if (
+            self.report_sparse_retry_enabled
+            and self.report_sparse_retry_top_k <= self.report_rag_top_k
+        ):
+            raise ValueError(
+                "report_sparse_retry_top_k must be greater than "
+                "report_rag_top_k when sparse retry is enabled"
+            )
         return self
 
     @field_validator("database_url", mode="after")
