@@ -444,6 +444,60 @@ def _format_indicator_group(
     return out
 
 
+_EVIDENCE_BUCKETS: tuple[str, ...] = (
+    "NÚMEROS E INDICADORES",
+    "POLÍTICAS E PROCESSOS",
+    "FATOS CONFIRMADOS",
+    "OBSERVAÇÕES DE CONTEXTO",
+)
+
+_RE_NUMERIC_WITH_UNIT = re.compile(
+    r"\d+[.,]?\d*\s*(?:%|kWh|MWh|tCO2e|tCO₂e|t\b|kg|L\b|m[³3]|ha|MW|R\$)",
+    flags=re.IGNORECASE,
+)
+_RE_GRI_INLINE = re.compile(r"\bGRI\s*\d+-\d+\b", flags=re.IGNORECASE)
+_RE_POLICY_LEMMA = re.compile(
+    r"\bpol[ií]ticas?\b|\bprocedimentos?\b|\bc[oó]digo\s+de\b|\bnormas?\b|"
+    r"\bISO\s*\d+\b|\bdiretrizes?\b|\bregulament[oa]s?\b|\bmanual\b",
+    flags=re.IGNORECASE,
+)
+_RE_DATE_YEAR = re.compile(r"\b(?:19|20)\d{2}\b")
+_RE_CNPJ = re.compile(r"\b\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\b")
+_RE_FACTUAL_VERB = re.compile(
+    r"\b(?:implementou|implementaram|certificou|certificaram|auditou|auditaram|"
+    r"publicou|publicaram|aderiu|aderiram|estabeleceu|estabeleceram|"
+    r"concluiu|concluíram|assinou|assinaram)\b",
+    flags=re.IGNORECASE,
+)
+
+
+def _classify_chunk_bucket(content: str) -> str:
+    """Heuristic: pick the dominant evidence type for a chunk.
+
+    Strong numeric signal (≥2 quantitative hits) wins over everything.
+    Otherwise: any policy signal > single numeric signal > factual > context.
+    """
+    numeric_hits = (
+        len(_RE_NUMERIC_WITH_UNIT.findall(content))
+        + len(_RE_GRI_INLINE.findall(content))
+    )
+    policy_hits = len(_RE_POLICY_LEMMA.findall(content))
+    factual_hits = (
+        len(_RE_DATE_YEAR.findall(content))
+        + len(_RE_CNPJ.findall(content))
+        + len(_RE_FACTUAL_VERB.findall(content))
+    )
+    if numeric_hits >= 2:
+        return "NÚMEROS E INDICADORES"
+    if policy_hits >= 1:
+        return "POLÍTICAS E PROCESSOS"
+    if numeric_hits >= 1:
+        return "NÚMEROS E INDICADORES"
+    if factual_hits >= 1:
+        return "FATOS CONFIRMADOS"
+    return "OBSERVAÇÕES DE CONTEXTO"
+
+
 def _format_project_chunks(chunks: list[RetrievedKnowledgeChunk]) -> str:
     if not chunks:
         return (
@@ -451,15 +505,23 @@ def _format_project_chunks(chunks: list[RetrievedKnowledgeChunk]) -> str:
             "Use somente fatos verificáveis disponíveis no contexto; não inclua "
             "avisos de processo, mensagens de erro ou diagnósticos no corpo da seção."
         )
-    blocks: list[str] = []
+    groups: dict[str, list[str]] = {bucket: [] for bucket in _EVIDENCE_BUCKETS}
     for idx, chunk in enumerate(chunks, 1):
+        bucket = _classify_chunk_bucket(chunk.content)
         header = (
             f"[{idx}] Documento: {chunk.filename} | "
             f"Diretório: {chunk.directory_key or 'n/d'} | "
             f"Relevância: {chunk.score:.2f}"
         )
-        blocks.append(f"{header}\n{chunk.content.strip()}")
-    return "\n\n".join(blocks)
+        groups[bucket].append(f"{header}\n{chunk.content.strip()}")
+
+    rendered: list[str] = []
+    for bucket in _EVIDENCE_BUCKETS:
+        entries = groups[bucket]
+        if not entries:
+            continue
+        rendered.append(f"=== {bucket} ===\n" + "\n\n".join(entries))
+    return "\n\n".join(rendered)
 
 
 def _format_reference_chunks(chunks: list[FrameworkReferenceChunk]) -> str:
