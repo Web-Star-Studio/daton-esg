@@ -219,7 +219,9 @@ async def test_run_single_agent_handles_missing_profile() -> None:
 
 @pytest.mark.asyncio
 async def test_run_single_agent_strips_invalid_gri_codes() -> None:
-    ctx = _make_context()
+    # Single-attempt test: disable sparse retry so FakeLLM isn't invoked twice
+    # (its short fixture text falls below a-empresa's min_target).
+    ctx = _make_context(report_sparse_retry_enabled=False)
     template = _get_template("a-empresa")
     queue: asyncio.Queue[SSEEvent | None] = asyncio.Queue()
 
@@ -282,7 +284,8 @@ async def test_run_single_agent_strips_invalid_gri_codes() -> None:
 
 @pytest.mark.asyncio
 async def test_run_single_agent_removes_inline_gap_diagnostics() -> None:
-    ctx = _make_context()
+    # Single-attempt test: disable sparse retry so FakeLLM isn't invoked twice.
+    ctx = _make_context(report_sparse_retry_enabled=False)
     template = _get_template("a-empresa")
     queue: asyncio.Queue[SSEEvent | None] = asyncio.Queue()
 
@@ -708,6 +711,15 @@ async def test_sparse_data_triggers_retry_with_doubled_top_k() -> None:
     assert result.audit.prompt_tokens == 2  # 1 per attempt × 2 attempts
     assert result.audit.completion_tokens == 2
     assert result.audit.total_tokens == 4
+    # Per-attempt forensic trail: both attempts recorded with individual usage
+    # and the retry window (top_k) reflects the doubled retrieval.
+    assert len(result.audit.retry_attempts) == 2
+    assert [a["attempt"] for a in result.audit.retry_attempts] == [0, 1]
+    assert all(a["total_tokens"] == 2 for a in result.audit.retry_attempts)
+    assert (
+        result.audit.retry_attempts[1]["rag_top_k"]
+        > result.audit.retry_attempts[0]["rag_top_k"]
+    )
     # Final content comes from the retry script (60-word body), not the sparse
     # first attempt.
     assert result.section_payload["content"].count("palavra") == 60

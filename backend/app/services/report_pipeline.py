@@ -195,6 +195,7 @@ class AgentAuditTrail:
     temperature: float = 0.0
     started_at: str = ""
     completed_at: str = ""
+    retry_attempts: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -372,6 +373,7 @@ async def _run_agent_inner(
     started_at: str,
     retry_count: int = 0,
     usage_totals: dict[str, int] | None = None,
+    attempt_records: list[dict[str, Any]] | None = None,
 ) -> AgentResult:
     from langchain_openai import ChatOpenAI
 
@@ -379,6 +381,9 @@ async def _run_agent_inner(
 
     accumulated_usage: dict[str, int] = dict(
         usage_totals or {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+    )
+    attempt_log: list[dict[str, Any]] = (
+        list(attempt_records) if attempt_records is not None else []
     )
 
     top_k_target = (
@@ -492,10 +497,25 @@ async def _run_agent_inner(
 
     content = "".join(content_parts)
 
+    attempt_usage = {
+        "input_tokens": int(usage.get("input_tokens", 0) or 0),
+        "output_tokens": int(usage.get("output_tokens", 0) or 0),
+        "total_tokens": int(usage.get("total_tokens", 0) or 0),
+    }
     for key in ("input_tokens", "output_tokens", "total_tokens"):
-        accumulated_usage[key] = accumulated_usage.get(key, 0) + int(
-            usage.get(key, 0) or 0
-        )
+        accumulated_usage[key] = accumulated_usage.get(key, 0) + attempt_usage[key]
+    attempt_log.append(
+        {
+            "attempt": retry_count,
+            "rag_chunks_count": len(project_chunks),
+            "rag_top_k": top_k_target,
+            "system_prompt_hash": prompt_hash,
+            "system_prompt_length": len(system_prompt.split()),
+            "prompt_tokens": attempt_usage["input_tokens"],
+            "completion_tokens": attempt_usage["output_tokens"],
+            "total_tokens": attempt_usage["total_tokens"],
+        }
+    )
 
     # --- validate ---
     new_gaps: list[dict[str, Any]] = []
@@ -609,6 +629,7 @@ async def _run_agent_inner(
                 started_at=started_at,
                 retry_count=retry_count + 1,
                 usage_totals=accumulated_usage,
+                attempt_records=attempt_log,
             )
         new_gaps.append(
             _build_gap(
@@ -670,6 +691,7 @@ async def _run_agent_inner(
         temperature=effective_temperature,
         started_at=started_at,
         completed_at=completed_at,
+        retry_attempts=attempt_log,
     )
 
     section_payload = {
