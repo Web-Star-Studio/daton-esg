@@ -195,6 +195,7 @@ class AgentAuditTrail:
     temperature: float = 0.0
     started_at: str = ""
     completed_at: str = ""
+    retry_attempts: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -370,18 +371,32 @@ async def _run_agent_inner(
     event_queue: asyncio.Queue[SSEEvent | None],
     started: float,
     started_at: str,
+    retry_count: int = 0,
+    usage_totals: dict[str, int] | None = None,
+    attempt_records: list[dict[str, Any]] | None = None,
 ) -> AgentResult:
     from langchain_openai import ChatOpenAI
 
     settings = ctx.settings
 
+    accumulated_usage: dict[str, int] = dict(
+        usage_totals or {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+    )
+    attempt_log: list[dict[str, Any]] = (
+        list(attempt_records) if attempt_records is not None else []
+    )
+
+    top_k_target = (
+        settings.report_sparse_retry_top_k
+        if retry_count >= 1
+        else settings.report_rag_top_k
+    )
+
     # --- retrieve ---
     async with SessionLocal() as session:
         project_chunks = []
         seen_ids: set[str] = set()
-        per_query_top_k = max(
-            3, settings.report_rag_top_k // max(1, len(template.rag_queries))
-        )
+        per_query_top_k = max(3, top_k_target // max(1, len(template.rag_queries)))
         for query in template.rag_queries:
             for directory_key in template.directory_keys or (None,):
                 try:
@@ -403,7 +418,7 @@ async def _run_agent_inner(
                         seen_ids.add(cid)
                         project_chunks.append(chunk)
         project_chunks.sort(key=lambda c: c.score, reverse=True)
-        project_chunks = project_chunks[: settings.report_rag_top_k]
+        project_chunks = project_chunks[:top_k_target]
 
     reference_chunks = []
     if template.prompt_strategy not in ("ods_alignment", "gri_summary"):
@@ -440,9 +455,14 @@ async def _run_agent_inner(
     user_prompt = _build_user_prompt(state)
 
     # --- generate ---
+    effective_temperature = (
+        profile.temperature_override
+        if profile.temperature_override is not None
+        else settings.report_generation_temperature
+    )
     llm = ChatOpenAI(
         model=settings.report_generation_model,
-        temperature=settings.report_generation_temperature,
+        temperature=effective_temperature,
         max_completion_tokens=settings.report_generation_max_output_tokens,
         api_key=(
             settings.openai_api_key.get_secret_value()
@@ -476,6 +496,26 @@ async def _run_agent_inner(
             usage = dict(chunk.usage_metadata)
 
     content = "".join(content_parts)
+
+    attempt_usage = {
+        "input_tokens": int(usage.get("input_tokens", 0) or 0),
+        "output_tokens": int(usage.get("output_tokens", 0) or 0),
+        "total_tokens": int(usage.get("total_tokens", 0) or 0),
+    }
+    for key in ("input_tokens", "output_tokens", "total_tokens"):
+        accumulated_usage[key] = accumulated_usage.get(key, 0) + attempt_usage[key]
+    attempt_log.append(
+        {
+            "attempt": retry_count,
+            "rag_chunks_count": len(project_chunks),
+            "rag_top_k": top_k_target,
+            "system_prompt_hash": prompt_hash,
+            "system_prompt_length": len(system_prompt.split()),
+            "prompt_tokens": attempt_usage["input_tokens"],
+            "completion_tokens": attempt_usage["output_tokens"],
+            "total_tokens": attempt_usage["total_tokens"],
+        }
+    )
 
     # --- validate ---
     new_gaps: list[dict[str, Any]] = []
@@ -557,6 +597,40 @@ async def _run_agent_inner(
     status = "completed"
     if word_count < min_target:
         status = "sparse_data"
+        if retry_count == 0 and settings.report_sparse_retry_enabled:
+            logger.info(
+                "report.agent_sparse_retry",
+                extra={
+                    "section": template.key,
+                    "word_count": word_count,
+                    "min_target": min_target,
+                    "retry_top_k": settings.report_sparse_retry_top_k,
+                },
+            )
+            await event_queue.put(
+                SSEEvent(
+                    event_type="section_retrying",
+                    data={
+                        "section_key": template.key,
+                        "word_count": word_count,
+                        "target_words": target,
+                        "reason": "sparse_data",
+                        "retry_top_k": settings.report_sparse_retry_top_k,
+                    },
+                )
+            )
+            return await _run_agent_inner(
+                template=template,
+                profile=profile,
+                ctx=ctx,
+                prior_sections_summary=prior_sections_summary,
+                event_queue=event_queue,
+                started=started,
+                started_at=started_at,
+                retry_count=retry_count + 1,
+                usage_totals=accumulated_usage,
+                attempt_records=attempt_log,
+            )
         new_gaps.append(
             _build_gap(
                 section_key=template.key,
@@ -609,14 +683,15 @@ async def _run_agent_inner(
         ],
         gri_codes_assigned=list(template.gri_codes),
         gri_codes_produced=gri_used,
-        prompt_tokens=int(usage.get("input_tokens", 0) or 0),
-        completion_tokens=int(usage.get("output_tokens", 0) or 0),
-        total_tokens=int(usage.get("total_tokens", 0) or 0),
+        prompt_tokens=accumulated_usage.get("input_tokens", 0),
+        completion_tokens=accumulated_usage.get("output_tokens", 0),
+        total_tokens=accumulated_usage.get("total_tokens", 0),
         latency_ms=elapsed_ms,
         model_id=settings.report_generation_model,
-        temperature=settings.report_generation_temperature,
+        temperature=effective_temperature,
         started_at=started_at,
         completed_at=completed_at,
+        retry_attempts=attempt_log,
     )
 
     section_payload = {

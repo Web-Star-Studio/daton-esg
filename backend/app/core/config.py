@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     report_max_section_ratio: float = 1.4
     report_phase1_max_concurrency: int = 5
     report_agent_timeout_seconds: int = 120
+    report_sparse_retry_enabled: bool = True
+    report_sparse_retry_top_k: int = 20
     extraction_model: str | None = None
     extraction_rag_top_k: int = 6
     extraction_max_parallel_extractors: int = 2
@@ -76,6 +78,14 @@ class Settings(BaseSettings):
         )
         if self.rag_chunk_overlap_chars >= self.rag_chunk_size_chars:
             raise ValueError("rag_chunk_overlap_chars must be smaller than chunk size")
+        if (
+            self.report_sparse_retry_enabled
+            and self.report_sparse_retry_top_k <= self.report_rag_top_k
+        ):
+            raise ValueError(
+                "report_sparse_retry_top_k must be greater than "
+                "report_rag_top_k when sparse retry is enabled"
+            )
         return self
 
     @field_validator("database_url", mode="after")
@@ -183,6 +193,7 @@ class Settings(BaseSettings):
         "report_generation_max_output_tokens",
         "gri_reference_top_k",
         "report_rag_top_k",
+        "report_sparse_retry_top_k",
         "report_phase1_max_concurrency",
         "report_agent_timeout_seconds",
         "extraction_rag_top_k",

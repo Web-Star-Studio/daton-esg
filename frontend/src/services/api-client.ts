@@ -685,6 +685,13 @@ export type ReportStreamHandlers = {
     target_words: number
   }) => void
   onSectionToken?: (data: { section_key: string; text: string }) => void
+  onSectionRetrying?: (data: {
+    section_key: string
+    word_count: number
+    target_words: number
+    reason: string
+    retry_top_k: number
+  }) => void
   onSectionCompleted?: (data: {
     section_key: string
     word_count: number
@@ -727,6 +734,9 @@ function _processReportSseChunk(
       return
     case 'section_token':
       handlers.onSectionToken?.(payload as never)
+      return
+    case 'section_retrying':
+      handlers.onSectionRetrying?.(payload as never)
       return
     case 'section_completed':
       handlers.onSectionCompleted?.(payload as never)
