@@ -650,9 +650,6 @@ async def test_sparse_data_triggers_retry_with_doubled_top_k() -> None:
     long = _build_enquadramento(60)
     fake_llm = StatefulFakeLLM(scripts=[[short], [long]])
 
-    cleaned_short = short
-    cleaned_long = long
-
     async def fake_classify(**kwargs):
         body = kwargs["ctx"].content
         return InlineGapClassificationResult(cleaned_content=body, findings=[])
@@ -709,8 +706,9 @@ async def test_sparse_data_triggers_retry_with_doubled_top_k() -> None:
     assert result.audit.prompt_tokens == 2  # 1 per attempt × 2 attempts
     assert result.audit.completion_tokens == 2
     assert result.audit.total_tokens == 4
-    # Sanity: cleaned_short/cleaned_long strings referenced so linters keep them.
-    assert cleaned_short in (short,) and cleaned_long in (long,)
+    # Final content comes from the retry script (60-word body), not the sparse
+    # first attempt.
+    assert result.section_payload["content"].count("palavra") == 60
 
 
 @pytest.mark.asyncio
