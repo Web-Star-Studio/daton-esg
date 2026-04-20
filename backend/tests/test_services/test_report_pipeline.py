@@ -640,7 +640,9 @@ def _build_enquadramento(n_words: int) -> str:
 
 @pytest.mark.asyncio
 async def test_sparse_data_triggers_retry_with_doubled_top_k() -> None:
-    ctx = _make_context()
+    # Explicit: this test exercises the retry branch, so don't rely on the
+    # global default for report_sparse_retry_enabled.
+    ctx = _make_context(report_sparse_retry_enabled=True)
     template = _make_tiny_template()
     queue: asyncio.Queue[SSEEvent | None] = asyncio.Queue()
 
